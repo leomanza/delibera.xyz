@@ -9,6 +9,7 @@ interface ConfigScreenProps {
   error: string | null;
   onSubmit: (params: {
     displayName: string;
+    endpointUrl: string;
     coordinatorDid: string;
   }) => void;
 }
@@ -19,6 +20,7 @@ function coordLabel(c: RegistryCoordinator): string {
 
 export default function ConfigScreen({ accountId, loading, error, onSubmit }: ConfigScreenProps) {
   const [displayName, setDisplayName] = useState("");
+  const [endpointUrl, setEndpointUrl] = useState("");
   const [coordinatorDid, setCoordinatorDid] = useState("");
   const [coordinators, setCoordinators] = useState<RegistryCoordinator[]>([]);
   const [loadingCoords, setLoadingCoords] = useState(true);
@@ -33,34 +35,27 @@ export default function ConfigScreen({ accountId, loading, error, onSubmit }: Co
       .finally(() => setLoadingCoords(false));
   }, []);
 
-  const canSubmit = displayName.length >= 2 && coordinatorDid;
+  const canSubmit =
+    displayName.length >= 2 &&
+    endpointUrl.startsWith("http") &&
+    coordinatorDid.length > 0;
 
   return (
     <div className="rounded border border-[#00ff41]/10 bg-[#0a0f0a]/80 p-6 terminal-card space-y-5">
-      {/* program.md link — prominent */}
-      <div className="p-3 rounded bg-zinc-900/60 border border-zinc-800 space-y-1">
-        <p className="text-[10px] text-zinc-400 font-mono">
-          &#128196; Read{" "}
-          <a
-            href="https://github.com/leomanza/near-shade-coordination/blob/main/program.md"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-[#00ff41] hover:underline"
-          >
-            program.md
-          </a>{" "}
-          to set up your agent. When you&apos;re ready, generate your identity below and follow the
-          config instructions.
-        </p>
-      </div>
-
       <div>
         <h3 className="text-sm font-semibold text-zinc-100 font-mono mb-1">
-          Generate Agent Identity
+          Register Your Agent
         </h3>
         <p className="text-[10px] text-zinc-600 font-mono">
-          Creates a DID keypair for your agent. Save the key file — it configures your worker&apos;s
-          sovereign identity.
+          Your agent should already be running with a public endpoint (see{" "}
+          <a
+            href="/skill.md"
+            target="_blank"
+            className="text-[#00ff41] hover:underline"
+          >
+            skill.md
+          </a>
+          , Step 3). Enter the details below to generate its identity and register on NEAR.
         </p>
       </div>
 
@@ -74,6 +69,22 @@ export default function ConfigScreen({ accountId, loading, error, onSubmit }: Co
             placeholder="My Governance Agent"
             className="w-full px-3 py-2 rounded bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono placeholder:text-zinc-700 focus:border-[#00ff41]/30 focus:outline-none"
           />
+        </div>
+
+        <div>
+          <label className="block text-[10px] text-zinc-500 font-mono mb-1">
+            Agent endpoint URL
+          </label>
+          <input
+            type="url"
+            value={endpointUrl}
+            onChange={(e) => setEndpointUrl(e.target.value)}
+            placeholder="https://my-agent.example.com"
+            className="w-full px-3 py-2 rounded bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono placeholder:text-zinc-700 focus:border-[#00ff41]/30 focus:outline-none"
+          />
+          <p className="text-[9px] text-zinc-700 font-mono mt-1">
+            Must implement GET / (health) and POST /api/task/execute
+          </p>
         </div>
 
         <div>
@@ -111,11 +122,11 @@ export default function ConfigScreen({ accountId, loading, error, onSubmit }: Co
         )}
 
         <button
-          onClick={() => onSubmit({ displayName, coordinatorDid })}
+          onClick={() => onSubmit({ displayName, endpointUrl, coordinatorDid })}
           disabled={!canSubmit || loading}
           className="w-full mt-2 px-4 py-3 rounded bg-[#00ff41]/10 border border-[#00ff41]/30 text-sm font-semibold text-[#00ff41] font-mono hover:bg-[#00ff41]/15 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
         >
-          {loading ? "generating..." : "Generate Identity"}
+          {loading ? "generating identity..." : "Generate Identity & Continue"}
         </button>
       </div>
     </div>

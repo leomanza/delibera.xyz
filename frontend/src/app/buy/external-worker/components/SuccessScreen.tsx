@@ -6,6 +6,7 @@ interface ExternalWorkerData {
   workerDid: string;
   privateKeyString: string;
   displayName: string;
+  endpointUrl: string;
   coordinatorDid: string;
   nearAccount: string;
 }
@@ -24,9 +25,10 @@ export default function SuccessScreen({
       workerDid: workerData.workerDid,
       privateKeyString: workerData.privateKeyString,
       displayName: workerData.displayName,
+      endpointUrl: workerData.endpointUrl,
       coordinatorDid: workerData.coordinatorDid,
       nearAccount: workerData.nearAccount,
-      generatedAt: new Date().toISOString(),
+      registeredAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -47,19 +49,20 @@ export default function SuccessScreen({
     <div className="rounded border border-[#00ff41]/20 bg-[#0a0f0a]/80 p-6 terminal-card space-y-5">
       <div className="flex items-center gap-2">
         <span className="text-[#00ff41] text-lg">&#10003;</span>
-        <h3 className="text-sm font-semibold text-zinc-100 font-mono">Identity generated</h3>
+        <h3 className="text-sm font-semibold text-zinc-100 font-mono">
+          {workerData.displayName} registered!
+        </h3>
       </div>
 
-      {/* Step 1 — Download key */}
+      {/* Key file — must download */}
       <div className="p-3 rounded bg-amber-950/30 border border-amber-700/40 space-y-2">
         <p className="text-[10px] text-amber-400 font-mono font-semibold">
-          &#9888; Step 1 — Download your key file now
+          &#9888; Download the key file and give it to your agent
         </p>
         <p className="text-[10px] text-amber-500/80 font-mono">
-          This private key cannot be recovered. Set{" "}
-          <span className="text-amber-300">STORACHA_AGENT_PRIVATE_KEY</span> in your{" "}
-          <span className="text-amber-300">.env</span> file to the{" "}
-          <span className="text-amber-300">privateKeyString</span> value.
+          Set <span className="text-amber-300">STORACHA_AGENT_PRIVATE_KEY</span> to the{" "}
+          <span className="text-amber-300">privateKeyString</span> value in your agent&apos;s{" "}
+          <span className="text-amber-300">.env</span>. This key cannot be recovered.
         </p>
         <button
           onClick={downloadKeyFile}
@@ -69,26 +72,7 @@ export default function SuccessScreen({
         </button>
       </div>
 
-      {/* Step 2 — program.md */}
-      <div className="p-3 rounded bg-[#00ff41]/5 border border-[#00ff41]/20 space-y-2">
-        <p className="text-[10px] text-[#00ff41]/80 font-mono font-semibold">
-          Step 2 — Follow program.md to set up and run your worker
-        </p>
-        <p className="text-[10px] text-zinc-500 font-mono">
-          The guide covers: configuring env vars, running the worker, and joining the swarm.
-          Your worker will auto-register on NEAR on first startup (0.1 NEAR required).
-        </p>
-        <a
-          href="https://github.com/leomanza/near-shade-coordination/blob/main/program.md"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block w-full text-center px-3 py-2 rounded bg-[#00ff41]/10 border border-[#00ff41]/30 text-xs text-[#00ff41] font-mono hover:bg-[#00ff41]/15 transition-colors"
-        >
-          Read program.md &#x2192;
-        </a>
-      </div>
-
-      {/* DID reference */}
+      {/* Worker details */}
       <div className="bg-zinc-900/50 border border-zinc-800 rounded p-3 space-y-1.5 text-[10px] font-mono">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -103,20 +87,40 @@ export default function SuccessScreen({
           </button>
         </div>
         <div>
-          <span className="text-zinc-600">Coordinator:</span>{" "}
-          <span className="text-zinc-500 break-all">
-            {workerData.coordinatorDid.length > 40
-              ? workerData.coordinatorDid.substring(0, 30) + "..."
-              : workerData.coordinatorDid}
-          </span>
+          <span className="text-zinc-600">Endpoint:</span>{" "}
+          <span className="text-zinc-400">{workerData.endpointUrl}</span>
         </div>
+        <div>
+          <span className="text-zinc-600">NEAR account:</span>{" "}
+          <span className="text-zinc-400">{workerData.nearAccount}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-zinc-600">Type:</span>
+          <span className="px-1.5 py-0.5 rounded text-[9px] bg-zinc-800 border border-zinc-700 text-zinc-400">EXTERNAL</span>
+        </div>
+      </div>
+
+      {/* Next step for agent */}
+      <div className="p-3 rounded bg-zinc-900/60 border border-zinc-800 space-y-1">
+        <p className="text-[10px] text-zinc-500 font-mono font-semibold">Next: finish agent setup</p>
+        <p className="text-[10px] text-zinc-600 font-mono">
+          Give the key file to your agent and ask it to complete Step 4 in{" "}
+          <a
+            href="/skill.md"
+            target="_blank"
+            className="text-[#00ff41] hover:underline"
+          >
+            skill.md
+          </a>{" "}
+          (set <span className="text-zinc-400">STORACHA_AGENT_PRIVATE_KEY</span> and restart).
+        </p>
       </div>
 
       <button
         onClick={onReset}
         className="w-full px-3 py-2 rounded border border-zinc-800 bg-zinc-900/40 text-[10px] text-zinc-500 font-mono hover:border-zinc-700 hover:text-zinc-400 transition-colors"
       >
-        Generate another identity
+        Register another agent
       </button>
     </div>
   );
