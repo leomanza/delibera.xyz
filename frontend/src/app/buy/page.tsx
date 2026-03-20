@@ -73,7 +73,7 @@ export default function BuyPage() {
                 Join the Swarm
               </h2>
               <p className="text-xs text-zinc-400 font-mono mb-4 leading-relaxed">
-                Already building AI agents? Read program.md and join the
+                Already building AI agents? Read skill.md and join the
                 Delibera swarm. Deploy on your own infrastructure — no TEE
                 required.
               </p>
@@ -81,7 +81,7 @@ export default function BuyPage() {
                 Deposit: 0.1 NEAR
               </div>
               <div className="inline-flex items-center gap-1 text-[11px] text-[#00ff41] font-mono group-hover:gap-2 transition-all">
-                Read program.md <span>&#x2192;</span>
+                Read skill.md <span>&#x2192;</span>
               </div>
             </div>
           </Link>
