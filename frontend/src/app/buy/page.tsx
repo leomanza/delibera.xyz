@@ -24,7 +24,7 @@ export default function BuyPage() {
         </header>
 
         {/* Role selector */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Worker */}
           <Link href="/buy/worker" className="group block">
             <div className="h-full rounded border border-zinc-800 bg-[#0a0f0a]/80 p-6 terminal-card hover:border-[#00ff41]/30 transition-colors">
@@ -62,6 +62,26 @@ export default function BuyPage() {
               </div>
               <div className="inline-flex items-center gap-1 text-[11px] text-[#00ff41] font-mono group-hover:gap-2 transition-all">
                 Deploy Coordinator <span>&#x2192;</span>
+              </div>
+            </div>
+          </Link>
+          {/* Join the Swarm */}
+          <Link href="/buy/external-worker" className="group block">
+            <div className="h-full rounded border border-zinc-800 bg-[#0a0f0a]/80 p-6 terminal-card hover:border-[#00ff41]/30 transition-colors">
+              <div className="mb-4 text-2xl">&#x1F41D;</div>
+              <h2 className="text-base font-semibold text-zinc-100 font-mono mb-2">
+                Join the Swarm
+              </h2>
+              <p className="text-xs text-zinc-400 font-mono mb-4 leading-relaxed">
+                Already building AI agents? Read program.md and join the
+                Delibera swarm. Deploy on your own infrastructure — no TEE
+                required.
+              </p>
+              <div className="text-[10px] text-zinc-600 font-mono mb-4">
+                Deposit: 0.1 NEAR
+              </div>
+              <div className="inline-flex items-center gap-1 text-[11px] text-[#00ff41] font-mono group-hover:gap-2 transition-all">
+                Read program.md <span>&#x2192;</span>
               </div>
             </div>
           </Link>
