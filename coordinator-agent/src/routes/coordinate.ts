@@ -16,6 +16,84 @@ import { selectJury, verifyJurySelection } from '../vrf/jury-selector';
 const LOCAL_MODE = process.env.LOCAL_MODE === 'true';
 const app = new Hono();
 
+/* ─── Worker Validation Cache ──────────────────────────────────────────── */
+
+const VALIDATION_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const validationCache = new Map<string, { valid: boolean; checkedAt: number }>();
+
+/**
+ * Probe a worker endpoint and verify its reported DID matches the registry.
+ * Returns true only if the worker responds within 5s and its workerDid matches.
+ */
+async function validateWorker(worker: { worker_did: string; endpoint_url: string }): Promise<boolean> {
+  try {
+    const res = await fetch(`${worker.endpoint_url}/`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) {
+      console.log(`[worker-validation] ${worker.worker_did} FAIL (HTTP ${res.status})`);
+      return false;
+    }
+    const body = await res.json() as { workerDid?: string };
+    if (body.workerDid === worker.worker_did) {
+      console.log(`[worker-validation] ${worker.worker_did} PASS`);
+      return true;
+    }
+    console.log(`[worker-validation] ${worker.worker_did} FAIL (DID mismatch: got ${body.workerDid})`);
+    return false;
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : 'unknown error';
+    console.log(`[worker-validation] ${worker.worker_did} FAIL (${reason})`);
+    return false;
+  }
+}
+
+/**
+ * Validate a list of workers in parallel, using the in-memory cache to skip
+ * workers that were already checked within the TTL.
+ */
+async function filterValidatedWorkers<T extends { did: string; endpoint_url: string }>(
+  workers: T[],
+): Promise<T[]> {
+  const now = Date.now();
+  const needsCheck: T[] = [];
+  const alreadyValid: T[] = [];
+
+  for (const w of workers) {
+    const cached = validationCache.get(w.did);
+    if (cached && now - cached.checkedAt < VALIDATION_TTL_MS) {
+      if (cached.valid) alreadyValid.push(w);
+      // cached invalid → skip silently
+      continue;
+    }
+    needsCheck.push(w);
+  }
+
+  if (needsCheck.length === 0) return alreadyValid;
+
+  const results = await Promise.allSettled(
+    needsCheck.map(async (w) => {
+      const valid = await validateWorker({ worker_did: w.did, endpoint_url: w.endpoint_url });
+      validationCache.set(w.did, { valid, checkedAt: Date.now() });
+      return { worker: w, valid };
+    }),
+  );
+
+  const freshValid = results
+    .filter((r): r is PromiseFulfilledResult<{ worker: T; valid: boolean }> =>
+      r.status === 'fulfilled' && r.value.valid)
+    .map(r => r.value.worker);
+
+  // Mark rejected promises as invalid in cache
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].status === 'rejected') {
+      validationCache.set(needsCheck[i].did, { valid: false, checkedAt: Date.now() });
+    }
+  }
+
+  return [...alreadyValid, ...freshValid];
+}
+
 let _nameResolver: NameResolver | null = null;
 
 let _ensueClient: EnsueClient | null = null;
@@ -30,6 +108,7 @@ function getEnsueClient(): EnsueClient {
  */
 async function getRegistryWorkers(): Promise<Array<{
   did: string;
+  account_id: string | null;
   endpoint_url: string;
   is_active: boolean;
   registered_at: number;
@@ -40,12 +119,19 @@ async function getRegistryWorkers(): Promise<Array<{
     const workers = await localViewRegistry<any[]>('get_workers_for_coordinator', {
       coordinator_did: coordinatorDID,
     });
-    return (workers ?? []).map(w => ({
+    const mapped = (workers ?? []).map(w => ({
       did: w.worker_did,
+      account_id: w.account_id ?? null,
       endpoint_url: w.endpoint_url,
       is_active: w.is_active,
       registered_at: w.registered_at,
     }));
+
+    // Validate active workers (DID + liveness check), pass through inactive as-is
+    const active = mapped.filter(w => w.is_active);
+    const inactive = mapped.filter(w => !w.is_active);
+    const validated = await filterValidatedWorkers(active);
+    return [...validated, ...inactive];
   } catch (e) {
     console.warn('[coordinate] Registry query failed, returning empty list:', e);
     return [];
@@ -124,6 +210,7 @@ app.get('/workers', async (c) => {
         const ensueStatus = statuses[getWorkerKeys(w.did).STATUS] || null;
         return {
           did: w.did,
+          account_id: w.account_id,
           display_name: names[w.did] || null,
           endpoint_url: w.endpoint_url,
           is_active: w.is_active,
