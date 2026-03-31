@@ -1,0 +1,101 @@
+---
+title: "Storacha"
+description: "Decentralized persistent storage for agent identity using IPFS and Filecoin"
+order: 2
+---
+
+# Storacha
+
+Storacha provides the decentralized persistence layer for Delibera agent memory. Data is encrypted with Lit Protocol threshold encryption, uploaded to IPFS, and pinned to Filecoin -- giving each worker a content-addressed, tamper-evident backup of its identity.
+
+## Per-Worker Spaces
+
+Every worker gets its own Storacha space, ensuring storage isolation at the protocol level. A space is identified by a `did:key` and acts as a namespace for all uploads by that worker.
+
+| Worker | Space DID |
+|---|---|
+| Coordinator | `did:key:z6MknNVto8CyvN9tMCGnTJ6KQbfHosnpMCfZJXHzXXMaxhiW` |
+| Worker 1 | `did:key:z6MktJXkKhgNhK1ZiecfG39zhRyn7e88jaijhSkUj5jyPKmc` |
+| Worker 2 | `did:key:z6Mkovsb6rneiFNKNvPyksvLjWxkg5mwfQ8jSK1zgPamVpnF` |
+| Worker 3 | `did:key:z6MknVJzCLxyk2M8XQitmfzdZv6KdeVHkFhaNvHZPieCfFHt` |
+
+Spaces cannot be created programmatically (the CLI requires email authentication). New workers receive access through UCAN delegation from the coordinator space.
+
+## UCAN Delegation
+
+Workers authenticate to Storacha using [UCAN](https://ucan.xyz/) (User Controlled Authorization Networks). The coordinator space delegates specific capabilities to each worker's DID:
+
+- `space/blob/add` -- upload encrypted blobs
+- `space/index/add` -- update the space index
+- `upload/add` -- register uploads
+- `upload/list` -- list existing uploads
+- `space/content/decrypt` -- decrypt previously uploaded content
+
+The delegation proof is a base64-encoded CAR file passed to the worker as `STORACHA_DELEGATION_PROOF`. The worker loads it at startup and uses it to authenticate all Storacha operations.
+
+## Lit Protocol Encryption
+
+Before uploading to Storacha, data is encrypted using [Lit Protocol](https://litprotocol.com/) threshold encryption. The `@storacha/encrypt-upload-client` package handles the integration:
+
+1. The vault creates a Lit crypto adapter connected to the `nagaDev` network
+2. Data is encrypted client-side using Lit's threshold key shares
+3. The encrypted blob is uploaded to Storacha (IPFS + Filecoin)
+4. On retrieval, Lit reassembles the decryption key from threshold shares
+
+Per-worker Lit auth state is stored locally at `.lit-auth-storage-{WORKER_ID}` to avoid re-authentication on every operation.
+
+<Callout type="info">
+The `nagaDev` Lit network is free and does not require a relay key. Production deployments should migrate to a mainnet Lit network.
+</Callout>
+
+## CID-Based Content Addressing
+
+Every upload returns a CID (Content Identifier) -- a hash of the encrypted content. CIDs are stored in Ensue as pointers (e.g., `agent/{DID}/manifesto_cid`) so that cold-start recovery can locate the data without an index.
+
+Because CIDs are deterministic hashes, the same data always produces the same CID. This provides tamper-evidence: if the content is modified, the CID changes.
+
+## IPFS Gateway Retrieval
+
+Retrieval goes through IPFS gateways with automatic fallback:
+
+1. `storacha.link` (primary, configurable via `STORACHA_GATEWAY_URL`)
+2. `w3s.link`
+3. `dweb.link`
+4. `ipfs.io`
+
+Each gateway gets one retry with a 10-second timeout before the next gateway is tried.
+
+<Callout type="warning">
+IPFS gateway reads are unreliable in practice -- 520 errors, corrupt CAR data, and timeouts are common. This is why Ensue serves as the primary read path. Storacha is used for writes (durable backup) and cold-start recovery only.
+</Callout>
+
+## ESM-Only Package
+
+The `@storacha/client` and related packages are ESM-only. Since the worker agent is a CJS project, direct `import` statements fail at runtime. The workaround is an indirect dynamic import that prevents TypeScript from compiling `import()` to `require()`:
+
+```ts
+const dynamicImport = new Function('specifier', 'return import(specifier)');
+const euc = await dynamicImport('@storacha/encrypt-upload-client');
+```
+
+<Callout type="warning">
+Do not use a regular `await import(...)` for Storacha packages in CJS code. TypeScript compiles it to `require()`, which fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`. The `new Function` trick is the only reliable workaround.
+</Callout>
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `STORACHA_AGENT_PRIVATE_KEY` | Yes | Ed25519 private key (base64) |
+| `STORACHA_DELEGATION_PROOF` | Yes | Base64-encoded UCAN delegation CAR |
+| `STORACHA_SPACE_DID` | No | Explicit space DID (usually derived from delegation) |
+| `STORACHA_GATEWAY_URL` | No | Primary IPFS gateway (default: `https://storacha.link`) |
+| `LIT_NETWORK` | No | Lit network name (default: `nagaDev`) |
+
+## Key Files
+
+| File | Role |
+|---|---|
+| `worker-agent/src/storacha/vault.ts` | Encrypt + upload / retrieve + decrypt via Storacha + Lit |
+| `worker-agent/src/storacha/identity.ts` | Storacha client creation, DID derivation |
+| `worker-agent/src/storacha/profile-client.ts` | Orchestrates reads/writes across Ensue and Storacha |

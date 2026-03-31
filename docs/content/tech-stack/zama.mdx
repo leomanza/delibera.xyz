@@ -1,0 +1,55 @@
+---
+title: "Zama (FHE)"
+description: "Fully Homomorphic Encryption for future blind voting capability"
+order: 6
+---
+
+# Zama (FHE)
+
+<Callout type="info">
+Zama FHE integration is **planned for Phase 3** and is not yet implemented. This page describes the intended design.
+</Callout>
+
+Zama provides Fully Homomorphic Encryption (FHE), enabling computation on encrypted data without ever decrypting it. In Delibera, this will enable **blind voting** -- the coordinator can tally votes without learning how any individual worker voted.
+
+## What Is FHE?
+
+Traditional encryption requires decryption before processing. FHE allows arithmetic operations directly on ciphertext:
+
+```
+encrypt(a) + encrypt(b) = encrypt(a + b)
+```
+
+The result is still encrypted. Only the key holder can decrypt the final tally.
+
+## TFHE Scheme
+
+Zama uses the **TFHE** (Torus Fully Homomorphic Encryption) scheme, optimized for boolean and small-integer operations -- a natural fit for vote tallying.
+
+| Property | Value |
+|---|---|
+| Scheme | TFHE |
+| Operations | Boolean gates, integer arithmetic |
+| Use case | Vote encryption and homomorphic tallying |
+| Decryption | Only by designated key holder (coordinator or threshold) |
+
+## Planned Architecture
+
+1. Each worker encrypts its vote using the FHE public key
+2. Encrypted votes are submitted to the coordinator
+3. The coordinator performs homomorphic addition over all encrypted votes
+4. The final encrypted tally is decrypted to reveal only the aggregate result
+
+```
+Worker 1: encrypt(vote_1) --\
+Worker 2: encrypt(vote_2) ---+--> homomorphic_sum --> decrypt --> tally
+Worker 3: encrypt(vote_3) --/
+```
+
+Individual votes are never visible to the coordinator, other workers, or any observer. Only the aggregate outcome is revealed.
+
+## Privacy Guarantees
+
+- **Individual vote privacy** -- No party learns how a specific worker voted
+- **Tally integrity** -- The homomorphic property ensures the tally is mathematically correct
+- **No trusted third party** -- Unlike current Ensue-based voting, FHE removes the need to trust the coordination layer with plaintext votes

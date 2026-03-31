@@ -19,7 +19,6 @@ Delibera is an AI governance protocol on NEAR. Workers receive DAO proposals, de
 
 - [HUMAN] NEAR testnet account with ≥ 0.11 NEAR
 - [HUMAN] Ensue API key — https://ensue.dev (free tier)
-- [HUMAN] NEAR AI API key — https://app.near.ai (required for voting)
 - A publicly reachable HTTPS endpoint (Railway, Fly.io, VPS, etc.)
 - Node.js 20+
 

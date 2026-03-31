@@ -1,0 +1,78 @@
+---
+title: "Verification & Proofs"
+description: "Cryptographic verification of AI reasoning using NEAR AI signatures"
+order: 2
+---
+
+# Verification & Proofs
+
+Every vote produced by a Delibera worker includes a cryptographic proof that the AI model generated the specific output. This provides trustless verification without revealing vote content publicly.
+
+## How It Works
+
+After a worker receives a vote from NEAR AI, it fetches an ECDSA signature tied to the chat session:
+
+```
+GET https://cloud-api.near.ai/v1/signature/{chat_id}
+```
+
+The response contains:
+
+| Field | Description |
+|---|---|
+| `signature` | ECDSA signature over the chat output |
+| `signing_address` | Public key / address of the signing TEE |
+| `chat_id` | Unique identifier for the deliberation session |
+
+## Verification Flow
+
+<MermaidDiagram chart={`
+sequenceDiagram
+    participant W as Worker
+    participant AI as NEAR AI (TEE)
+    participant V as Verifier
+
+    W->>AI: Chat completion (proposal + identity)
+    AI-->>W: dao_vote tool call (vote + reasoning)
+    Note over AI: TEE signs output with ECDSA key
+    W->>AI: GET /v1/signature/{chat_id}
+    AI-->>W: { signature, signing_address, chat_id }
+    W->>W: Store proof alongside vote in Ensue
+
+    V->>V: Recover signer from (message, signature)
+    V->>V: Verify signer matches known TEE address
+`} />
+
+## What the Proof Guarantees
+
+The ECDSA signature proves:
+
+1. **Authenticity** -- the output was produced by the specified model running inside NEAR AI infrastructure
+2. **Integrity** -- the vote and reasoning have not been modified after generation
+3. **Non-repudiation** -- the specific `chat_id` is permanently tied to the output
+
+The proof does **not** reveal the vote content to anyone who does not already have access to the Ensue data. The signature is over the full chat output, but verification only requires the signature, signing address, and message hash.
+
+## TEE Attestation
+
+NEAR AI runs models inside Intel TDX Trusted Execution Environments. The `signing_address` returned by the signature endpoint can be traced back to a TEE attestation report, linking the cryptographic proof to verified hardware.
+
+This creates a chain of trust: hardware attestation confirms the TEE is genuine, and the ECDSA signature confirms the TEE produced the specific output.
+
+<Callout type="info">
+The TEE attestation chain means a verifier does not need to trust NEAR AI as an organization -- only that Intel TDX hardware attestation is valid.
+</Callout>
+
+## Privacy Model
+
+| Data | Where | Who Can See |
+|---|---|---|
+| Individual vote + reasoning | Ensue (AES-256-GCM encrypted) | Worker + coordinator only |
+| ECDSA proof | Ensue (stored with vote) | Worker + coordinator only |
+| Aggregate tally | NEAR contract (on-chain) | Public |
+
+Individual reasoning and proofs stay off-chain. Only the aggregate vote count and final decision are submitted to the NEAR contract. A verifier with access to the Ensue data can independently confirm each vote was AI-generated, but the on-chain record reveals nothing about individual positions.
+
+<Callout type="warning">
+Verification proofs are tied to `chat_id`, which is ephemeral. If the NEAR AI signature endpoint becomes unavailable, previously fetched proofs remain valid but new proofs for old sessions cannot be retrieved.
+</Callout>

@@ -1,0 +1,138 @@
+---
+title: Local Development
+order: 5
+---
+
+# Local Development
+
+Run the full Delibera stack locally for development and testing. `LOCAL_MODE=true` skips TEE attestation and uses `near-api-js` directly for contract calls.
+
+## Quick start
+
+```bash
+./run-dev.sh
+```
+
+This starts:
+
+| Service | Port | Description |
+|---|---|---|
+| Coordinator | 3000 | Orchestrator agent |
+| Worker 1 | 3001 | First worker agent |
+| Worker 2 | 3002 | Second worker agent |
+| Worker 3 | 3003 | Third worker agent |
+| Frontend | 3004 | Next.js dashboard |
+
+## Controlling worker count
+
+```bash
+WORKER_COUNT=2 ./run-dev.sh
+```
+
+Set `WORKER_COUNT` to any number. Workers are assigned ports starting at 3001.
+
+## Environment files
+
+Each service reads its own env file:
+
+| Service | Env file |
+|---|---|
+| Coordinator | `coordinator-agent/.env.development.local` |
+| Worker N | `worker-agent/.env.workerN.local` |
+
+<Callout type="tip">
+  Copy the `.env.example` files and fill in your API keys. At minimum you need `ENSUE_API_KEY`, `NEAR_ACCOUNT_ID`, `NEAR_SEED_PHRASE`, and `NEAR_AI_API_KEY`.
+</Callout>
+
+## Key settings for local mode
+
+In the coordinator env file, make sure:
+
+```bash
+LOCAL_MODE=true
+COORDINATOR_ENDPOINT_URL=http://localhost:3000
+MIN_WORKERS=1
+```
+
+In each worker env file:
+
+```bash
+PHALA_CVM_ID=local
+WORKER_ENDPOINT_URL=http://localhost:300N
+COORDINATOR_DID=<coordinator DID from coordinator startup log>
+REGISTRY_CONTRACT_ID=registry.agents-coordinator.testnet
+```
+
+## Testing the voting flow
+
+### 1. Create a proposal
+
+Use the dashboard at [localhost:3004](http://localhost:3004) or trigger via curl:
+
+```bash
+curl -X POST http://localhost:3000/api/coordinate/trigger \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "taskConfig": {
+      "type": "vote",
+      "parameters": {
+        "proposal": "Fund a developer education program",
+        "voting_config": { "min_workers": 2, "quorum": 2 }
+      }
+    }
+  }'
+```
+
+### 2. Monitor progress
+
+```bash
+# Check coordination status
+curl http://localhost:3000/api/coordinate/status
+
+# List registered workers
+curl http://localhost:3000/api/coordinate/workers
+```
+
+### 3. Watch workers deliberate
+
+Worker logs will show:
+- Task detection from Ensue polling
+- Manifesto fetch from the NEAR contract
+- NEAR AI deliberation via `dao_vote` tool
+- Vote submission back to Ensue
+
+The coordinator aggregates votes once all workers complete (or the timeout expires with quorum met) and submits the result on-chain.
+
+## Frontend development
+
+The Next.js frontend runs on port 3004 with hot reload enabled by default:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+<Callout type="info">
+  The frontend reads `NEXT_PUBLIC_contractId` from its env to determine which coordinator contract to display. Set this in `frontend/.env.local`.
+</Callout>
+
+## Protocol API
+
+The coordinator exposes these endpoints locally:
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/coordinate/trigger` | POST | Create a new proposal |
+| `/api/coordinate/status` | GET | Current coordination status |
+| `/api/coordinate/workers` | GET | List registered workers (DID-keyed) |
+| `/api/coordinate/reset` | POST | Reset coordination state |
+
+## LOCAL_MODE vs Production
+
+| Behavior | LOCAL_MODE=true | Production |
+|---|---|---|
+| Contract calls | `near-api-js` with seed phrase | Shade Agent SDK + DCAP attestation |
+| Worker dispatch | HTTP POST to workers | Ensue polling (workers self-poll) |
+| TEE | None | Phala Intel TDX |
+| Worker discovery | Registry + fallback to `WORKERS` env | Registry only |

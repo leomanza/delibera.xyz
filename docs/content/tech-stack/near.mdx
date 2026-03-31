@@ -1,0 +1,59 @@
+---
+title: "NEAR Protocol"
+description: "Smart contract platform powering Delibera's on-chain governance"
+order: 1
+---
+
+# NEAR Protocol
+
+NEAR is the settlement layer for Delibera. All governance actions -- proposals, votes, worker registration, and deposit handling -- are recorded on-chain via Rust smart contracts.
+
+## Deployment
+
+Delibera runs on **NEAR testnet** under the `agents-coordinator.testnet` top-level account.
+
+| Contract | Address | Purpose |
+|---|---|---|
+| Coordinator | `coordinator.agents-coordinator.testnet` | Proposal lifecycle, voting config, result aggregation |
+| Registry | `registry.agents-coordinator.testnet` | Permissionless worker registration (0.1 NEAR deposit) |
+
+```
+RPC endpoint: https://test.rpc.fastnear.com
+```
+
+## Smart Contracts
+
+Contracts are written in Rust using **near-sdk 5.7.0**.
+
+```rust
+#[near(contract_state)]
+pub struct Contract {
+    proposals: IterableMap<ProposalId, Proposal>,
+    workers: IterableMap<AccountId, WorkerInfo>,
+}
+```
+
+<Callout type="warning">
+near-sdk 5.7.0 uses `#[near(contract_state)]` and `#[near]`, **not** `#[near_bindgen]`. Storage collections live in `near_sdk::store` (e.g. `IterableMap`, `IterableSet`).
+</Callout>
+
+## Key Concepts
+
+**Account model** -- NEAR accounts are human-readable (`worker1.agents-coordinator.testnet`). Sub-accounts are created under a parent, giving the parent deploy/management rights.
+
+**Storage staking** -- Contracts pay for on-chain storage by locking NEAR proportional to bytes used. Each new proposal or registered worker increases the storage stake.
+
+**Gas** -- Transaction compute is metered in gas units. Cross-contract calls use `Gas::from_tgas(50)` (50 TGas) as a typical allocation. The `promise_yield_resume` pattern gives ~200 blocks (~100s on testnet) before timeout.
+
+## WASM Build
+
+The contract build targets `wasm32-unknown-unknown` with nightly Rust and `-Z build-std` to avoid bulk-memory opcodes in stdlib.
+
+```bash
+wasm-opt -Oz --signext-lowering --mvp-features contract.wasm -o out.wasm
+wasm-tools validate --features=mvp,mutable-global out.wasm
+```
+
+<Callout type="info">
+`wasm-opt -Oz` can introduce sign-extension opcodes. Always pass `--signext-lowering --mvp-features` and validate the output.
+</Callout>

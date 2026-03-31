@@ -1,0 +1,56 @@
+---
+title: "Lit Protocol"
+description: "Threshold encryption for decentralized key management"
+order: 4
+---
+
+# Lit Protocol
+
+Lit Protocol provides threshold encryption for Delibera's persistent agent memory stored in Storacha. Instead of trusting a single key holder, decryption requires cooperation from multiple nodes.
+
+## Threshold Encryption
+
+Lit splits an encryption key across **N nodes** and requires **M of N** to reconstruct it for decryption. This means:
+
+- No single node can decrypt data alone
+- The network tolerates node failures up to N - M
+- Access control conditions gate who can request decryption
+
+```
+Encrypt: data -> Lit network splits key -> encrypted blob + key shares
+Decrypt: request + access control check -> M nodes release shares -> data
+```
+
+## Network
+
+Delibera uses the **nagaDev** network, which is free and does not require a relay key.
+
+```typescript
+const litClient = new LitNodeClient({
+  litNetwork: 'nagaDev',
+});
+```
+
+## Integration with Storacha
+
+Lit encryption is applied before uploading to Storacha via `@storacha/encrypt-upload-client`:
+
+```typescript
+import { encryptAndUpload } from '@storacha/encrypt-upload-client';
+
+const cid = await encryptAndUpload(client, litClient, data, accessControlConditions);
+```
+
+The encrypted blob is stored on IPFS/Filecoin; only agents meeting the access control conditions can decrypt it through Lit.
+
+## Per-Worker Auth Storage
+
+Each worker maintains its own Lit authentication state, stored at a worker-specific path to avoid conflicts:
+
+```
+.lit-auth-storage-{WORKER_ID}
+```
+
+<Callout type="info">
+Lit encryption protects the Storacha (cold storage) layer. The Ensue (hot cache) layer uses a separate AES-256-GCM scheme derived from each worker's private key. Both layers are encrypted at rest.
+</Callout>

@@ -1,0 +1,135 @@
+---
+title: Coordinator
+order: 1
+---
+
+# Coordinator Agent
+
+The coordinator is the orchestration layer that bridges on-chain proposals and off-chain AI workers. It runs as a TypeScript service on **port 3000**.
+
+**Source:** `coordinator-agent/src/monitor/memory-monitor.ts`
+
+## Responsibilities
+
+- Poll the NEAR contract for pending proposals
+- Discover and validate workers from the registry
+- Dispatch tasks to workers via Ensue
+- Monitor worker completion with quorum awareness
+- Tally votes and submit only the aggregate result on-chain
+- Back up deliberation data to Storacha and Filecoin
+
+## Proposal Lifecycle
+
+<MermaidDiagram chart={`
+sequenceDiagram
+    participant User
+    participant Contract as NEAR Contract
+    participant Coord as Coordinator
+    participant Registry
+    participant Ensue
+    participant Workers
+
+    User->>Contract: start_coordination(task_config)
+    Contract->>Contract: Create yielded promise
+    Coord->>Contract: Poll get_pending_coordinations()
+    Coord->>Registry: get_workers_for_coordinator(did)
+    Registry-->>Coord: Worker list (DIDs + endpoints)
+    Coord->>Coord: Snapshot worker DIDs
+    Coord->>Ensue: Write task config + set worker statuses to "pending"
+    Workers->>Ensue: Poll for pending status
+    Workers->>Ensue: Write vote results
+    Coord->>Ensue: Monitor completion (120s timeout)
+    Coord->>Contract: record_worker_submissions(hashes)
+    Coord->>Contract: coordinator_resume(aggregate tally)
+    Contract->>Contract: Validate + finalize
+`} />
+
+### On-Chain States
+
+```
+Created ──────> WorkersCompleted ──────> Finalized
+  (yield)         (nullifiers)           (aggregate stored)
+    │
+    └──────────────────────────────────> TimedOut
+                  (~200 blocks)
+```
+
+## Worker Discovery
+
+The coordinator discovers workers dynamically from the NEAR registry contract:
+
+1. Query `get_workers_for_coordinator(coordinatorDID)` on `registry.agents-coordinator.testnet`
+2. For each registered worker, ping the health endpoint to confirm liveness
+3. Validate DID consistency: the DID reported by the worker's health endpoint must match the registry record
+4. Take a snapshot of valid worker DIDs for the proposal -- stored in Ensue at `coordination/coordinator/worker_snapshot_{proposalId}`
+
+<Callout type="info">
+Workers that fail the health check or DID validation are excluded from the snapshot. The coordinator does not need to restart to pick up newly registered workers.
+</Callout>
+
+## Quorum Configuration
+
+Each proposal can override quorum settings via `voting_config`:
+
+```json
+{
+  "type": "vote",
+  "parameters": {
+    "proposal": "Fund a developer education program",
+    "voting_config": {
+      "min_workers": 2,
+      "quorum": 2
+    }
+  }
+}
+```
+
+The coordinator waits until the quorum is met or the 120-second timeout expires before tallying.
+
+## Post-Vote Pipeline
+
+After votes are collected, the coordinator runs a multi-step pipeline:
+
+```
+Vote complete
+  └─> Tally + resume contract (on-chain settlement)
+  └─> Encrypt deliberation transcript → upload to Storacha (warm)
+  └─> Archive Storacha CID to Filecoin (cold)
+  └─> Serialize full Ensue tree → Storacha backup
+```
+
+## Operating Modes
+
+| | LOCAL_MODE=true | Production |
+|---|---|---|
+| Contract calls | `near-api-js` with seed phrase | Shade Agent SDK + DCAP attestation |
+| Worker trigger | Write `STATUS=pending` to Ensue | Same (workers self-poll) |
+| TEE | None | Phala Intel TDX |
+| Registry | `localViewRegistry` + fallback | Registry only |
+
+<Callout type="warning">
+In production, the coordinator does **not** HTTP-call workers. It only writes `STATUS=pending` to Ensue. Workers must run `startWorkerPollingLoop()` to detect tasks.
+</Callout>
+
+## Phala TEE Deployment
+
+Managed coordinators run inside Phala TEE (Intel TDX) for verifiable execution:
+
+- Deploy via `POST /api/deploy` which provisions a CVM on Phala
+- The TEE registers its codehash with the NEAR contract
+- Only TEE-registered coordinators with owner-approved codehashes can call `coordinator_resume`
+- Endpoint URL availability takes 3-10+ minutes after provisioning
+
+## Key Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `PORT` | Service port (default 3000) |
+| `LOCAL_MODE` | Skip TEE registration, use `near-api-js` |
+| `ENSUE_API_KEY` / `ENSUE_TOKEN` | Ensue access credentials |
+| `NEAR_ACCOUNT_ID` | NEAR account for contract calls |
+| `NEAR_SEED_PHRASE` | Signing key (LOCAL_MODE) |
+| `REGISTRY_CONTRACT_ID` | Registry contract address |
+| `MIN_WORKERS` / `MAX_WORKERS` | Worker count bounds |
+| `STORACHA_AGENT_PRIVATE_KEY` | Coordinator's sovereign DID key |
+| `STORACHA_DELEGATION_PROOF` | UCAN delegation for Storacha space |

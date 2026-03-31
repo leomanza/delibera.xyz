@@ -1,0 +1,203 @@
+---
+title: "Contract Development"
+order: 3
+---
+
+# Contract Development
+
+Guide for building, testing, and deploying Delibera's NEAR smart contracts.
+
+## Prerequisites
+
+- Rust nightly toolchain
+- `wasm32-unknown-unknown` target
+- `wasm-opt` (from [binaryen](https://github.com/WebAssembly/binaryen))
+- `wasm-tools` for validation
+- `near-cli-rs` or `near-cli`
+
+## Project Structure
+
+```
+coordinator-contract/
+  src/lib.rs
+  Cargo.toml           # near-sdk 5.7.0
+  target/near/*.wasm
+
+registry-contract/
+  src/lib.rs
+  target/near/registry_contract.wasm
+```
+
+## near-sdk 5.7.0 Conventions
+
+The contracts use `near-sdk` 5.7.0, which uses attribute macros different from older versions:
+
+```rust
+// Contract state -- use #[near(contract_state)], NOT #[near_bindgen]
+#[near(contract_state)]
+#[derive(PanicOnDefault)]
+pub struct MyContract {
+    pub data: IterableMap<String, String>,
+}
+
+// Impl block -- use #[near], NOT #[near_bindgen]
+#[near]
+impl MyContract {
+    #[init]
+    #[private]
+    pub fn new() -> Self { /* ... */ }
+}
+
+// Serializable structs
+#[near(serializers = [json, borsh])]
+#[derive(Clone)]
+pub struct MyStruct {
+    pub field: String,
+}
+```
+
+Use `store::` collections for on-chain storage:
+
+```rust
+use near_sdk::store::{IterableMap, IterableSet};
+```
+
+Gas constants use the `from_tgas` helper:
+
+```rust
+const RETURN_RESULT_GAS: Gas = Gas::from_tgas(50);
+```
+
+## BorshStorageKey
+
+<Callout type="danger">
+BorshStorageKey ordinals are positional. Never reorder or remove variants. When deprecating a storage key, replace it with a `_Deprecated` placeholder to preserve ordinal positions. Adding new keys at the end is always safe.
+</Callout>
+
+```rust
+#[derive(BorshStorageKey)]
+#[near]
+pub enum StorageKey {
+    _Dep0, _Dep1, _Dep2, _Dep3,  // burned ordinals -- never reuse
+    WorkersByDid,                  // ordinal 4
+    CoordinatorsByDid,             // ordinal 5
+}
+```
+
+Each `#[init(ignore_state)]` redeploy leaves orphaned storage entries at old prefixes. Advance to fresh ordinals on every schema-breaking migration.
+
+## Building
+
+NEAR contracts must target `wasm32-unknown-unknown`. Use nightly with `-Z build-std` to avoid bulk-memory opcodes in the standard library:
+
+```bash
+# Build the coordinator contract
+cd coordinator-contract
+cargo +nightly build --target wasm32-unknown-unknown --release \
+  -Z build-std=std,alloc,core \
+  -Z build-std-features=panic_immediate_abort
+```
+
+### Optimize with wasm-opt
+
+`wasm-opt -Oz` can introduce `sign-ext` opcodes that NEAR rejects. Always pass the lowering flags:
+
+```bash
+wasm-opt -Oz \
+  --signext-lowering \
+  --mvp-features \
+  -o target/near/coordinator_contract.wasm \
+  target/wasm32-unknown-unknown/release/coordinator_contract.wasm
+```
+
+### Validate
+
+Verify the output WASM uses only MVP features:
+
+```bash
+wasm-tools validate --features=mvp,mutable-global target/near/coordinator_contract.wasm
+```
+
+If validation fails with `sign-ext` or `bulk-memory` errors, recheck the `--signext-lowering` and `-Z build-std` flags.
+
+## Testing
+
+Both contracts include unit tests using `near_sdk::test_utils`:
+
+```bash
+cd coordinator-contract && cargo test
+cd registry-contract && cargo test
+```
+
+<Callout type="info">
+`start_coordination` calls `env::promise_yield_create` which is not available in unit tests. Tests that need proposals construct `Proposal` structs directly and insert them into the map.
+</Callout>
+
+## Deploying
+
+Deploy to an existing sub-account of `agents-coordinator.testnet`:
+
+```bash
+# Deploy coordinator contract
+near deploy --accountId coordinator.agents-coordinator.testnet \
+  --wasmFile target/near/coordinator_contract.wasm
+
+# Deploy registry contract
+near deploy --accountId registry.agents-coordinator.testnet \
+  --wasmFile target/near/registry_contract.wasm
+```
+
+### Post-deploy Initialization
+
+For a fresh deploy, initialize the contract:
+
+```bash
+near call coordinator.agents-coordinator.testnet new \
+  '{"owner":"agents-coordinator.testnet"}' \
+  --accountId coordinator.agents-coordinator.testnet
+
+near call registry.agents-coordinator.testnet new \
+  '{"admin":"agents-coordinator.testnet"}' \
+  --accountId registry.agents-coordinator.testnet
+```
+
+### Migration
+
+When deploying updated code with breaking state changes, use `force_migrate` (coordinator) or `force_reinitialize` (registry):
+
+```bash
+# Coordinator: preserves proposal counter
+near call coordinator.agents-coordinator.testnet force_migrate \
+  '{"owner":"agents-coordinator.testnet","current_proposal_id":22}' \
+  --accountId coordinator.agents-coordinator.testnet
+
+# Registry: resets all records
+near call registry.agents-coordinator.testnet force_reinitialize \
+  '{"admin":"agents-coordinator.testnet"}' \
+  --accountId registry.agents-coordinator.testnet
+```
+
+<Callout type="warning">
+`force_reinitialize` on the registry clears all coordinator and worker records. Only use when no live data needs to be preserved.
+</Callout>
+
+### Post-deploy Setup (Coordinator)
+
+After deploying the coordinator contract, set the manifesto and approve the coordinator's TEE codehash:
+
+```bash
+# Set the DAO manifesto
+near call coordinator.agents-coordinator.testnet set_manifesto \
+  '{"manifesto_text":"Our DAO values ..."}' \
+  --accountId agents-coordinator.testnet
+
+# Approve coordinator codehash (from Phala TEE deployment)
+near call coordinator.agents-coordinator.testnet approve_codehash \
+  '{"codehash":"abc123..."}' \
+  --accountId agents-coordinator.testnet
+
+# Register the coordinator agent
+near call coordinator.agents-coordinator.testnet register_coordinator \
+  '{"checksum":"...","codehash":"abc123..."}' \
+  --accountId agents-coordinator.testnet
+```

@@ -1,0 +1,58 @@
+---
+title: "Ensue Network"
+description: "Shared state and coordination layer for AI agents"
+order: 5
+---
+
+# Ensue Network
+
+Ensue is the real-time coordination bus for Delibera. It stores shared agent state, memory caches, and vote data using a JSON-RPC 2.0 API delivered over Server-Sent Events (SSE).
+
+## Endpoint
+
+```
+https://api.ensue-network.ai/
+```
+
+Free tier available at [ensue.dev](https://ensue.dev).
+
+## API Pattern
+
+All operations use **JSON-RPC 2.0** over SSE:
+
+```typescript
+const response = await fetch('https://api.ensue-network.ai/', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    jsonrpc: '2.0',
+    method: 'create_memory',
+    params: { key: 'worker1/profile', value: encryptedData },
+    id: 1,
+  }),
+});
+```
+
+## Key Operations
+
+| Method | Purpose | Notes |
+|---|---|---|
+| `create_memory` | Store a new key-value pair | Fails if key already exists |
+| `update_memory` | Update an existing key | Fails if key does not exist -- fallback to `create_memory` |
+| `read_memory` | Read value by key | Returns `null` if missing |
+| `list_keys` | List keys by prefix | Response in `structuredContent.keys[]` |
+
+<Callout type="warning">
+Read responses use `structuredContent.results[].value`, **not** `.memories`. The `update_memory` method errors on missing keys -- always handle the fallback to `create_memory`.
+</Callout>
+
+## What Delibera Stores in Ensue
+
+- **Agent memory cache** -- AES-256-GCM encrypted profiles and accumulated knowledge (primary read path)
+- **Task coordination** -- Coordinator writes task status; workers poll for assignments
+- **Vote data** -- Individual encrypted votes during deliberation rounds
+- **Worker status** -- Liveness and DID consistency checks
+
+## Encryption at Rest
+
+All agent memory in Ensue is AES-256-GCM encrypted. The key is derived from each worker's `STORACHA_AGENT_PRIVATE_KEY` via HMAC-SHA256. Stored values are prefixed with `aes256gcm:` to distinguish from legacy plaintext entries, which are auto-migrated on next write.

@@ -1,0 +1,140 @@
+---
+title: "Ensue Network"
+description: "Shared state layer providing encrypted agent memory storage"
+order: 3
+---
+
+# Ensue Network
+
+Ensue is the shared state layer that Delibera uses for fast, reliable agent memory reads and writes. It serves as the primary read cache for persistent memory and the coordination bus for task dispatch between the coordinator and workers.
+
+## Protocol
+
+Ensue exposes a **JSON-RPC 2.0** API over **Server-Sent Events (SSE)**:
+
+```
+Endpoint: https://api.ensue-network.ai/
+Transport: SSE (streaming responses)
+```
+
+All operations are JSON-RPC calls with `method`, `params`, and standard `id`/`jsonrpc` fields.
+
+## Key Namespace
+
+Agent memory keys follow a DID-prefixed convention to ensure isolation:
+
+```
+agent/{DID}/manifesto          -- agent identity (name, role, values)
+agent/{DID}/preferences        -- voting weights, knowledge notes
+agent/{DID}/decisions          -- recent decision history
+agent/{DID}/knowledge          -- accumulated knowledge notes
+agent/{DID}/manifesto_cid      -- Storacha CID pointer (for cold recovery)
+agent/{DID}/preferences_cid
+agent/{DID}/decisions_cid
+agent/{DID}/knowledge_cid
+```
+
+The DID (`did:key:z6Mk...`) replaces the legacy `WORKER_ID` (`worker1`, `worker2`) as the key prefix. This ensures each worker has a globally unique, self-sovereign namespace.
+
+## AES-256-GCM Encryption
+
+Ensue does not provide native encryption. All agent memory is encrypted client-side before storage using AES-256-GCM:
+
+**Key derivation:**
+```
+AES key = HMAC-SHA256(STORACHA_AGENT_PRIVATE_KEY, "delibera-ensue-cache-v1")
+```
+
+The private key is decoded from base64 and used as the HMAC key. The context string `"delibera-ensue-cache-v1"` ensures domain separation. The resulting 32-byte output is imported as an AES-GCM `CryptoKey` via Node.js `crypto.subtle`.
+
+**Ciphertext format:**
+```
+aes256gcm:<base64(12-byte IV || ciphertext)>
+```
+
+The `aes256gcm:` prefix marks encrypted values. Values without this prefix are treated as legacy plaintext and parsed directly with `JSON.parse`. On the next write, they are automatically re-encrypted.
+
+<Callout type="info">
+No external KMS or key management service is needed. The AES key is derived deterministically from the same `STORACHA_AGENT_PRIVATE_KEY` that drives the worker's DID and Storacha identity.
+</Callout>
+
+## Auto-Migration from Plaintext
+
+Older Ensue entries stored before encryption was added are handled transparently:
+
+1. `decryptFromEnsue` checks for the `aes256gcm:` prefix
+2. If absent, it attempts `JSON.parse` on the raw string (plaintext fallback)
+3. Bare CIDs (strings starting with `baf`) are skipped (not valid JSON)
+4. On the next save, the data is written back with AES encryption
+
+This means no manual migration step is required -- plaintext entries are upgraded on first access.
+
+## Operations
+
+### `create_memory`
+
+Create a new key-value pair:
+
+```json
+{
+  "method": "create_memory",
+  "params": { "key": "agent/{DID}/manifesto", "value": "aes256gcm:..." }
+}
+```
+
+### `read_memory`
+
+Read a value by key. Response is in `structuredContent.results[].value`:
+
+```json
+{
+  "result": {
+    "structuredContent": {
+      "results": [{ "key": "agent/{DID}/manifesto", "value": "aes256gcm:..." }]
+    }
+  }
+}
+```
+
+<Callout type="warning">
+Read the value from `structuredContent.results[].value`, not `.memories` or any other path. This is the only correct response format.
+</Callout>
+
+### `update_memory`
+
+Update an existing key-value pair. Uses the same request format as `create_memory`.
+
+<Callout type="warning">
+`update_memory` returns an error if the key does not exist. Always fall back to `create_memory` when an update fails. The profile client handles this automatically.
+</Callout>
+
+### `list_keys`
+
+List all keys matching a prefix. Response is in `structuredContent.keys[]`:
+
+```json
+{
+  "result": {
+    "structuredContent": {
+      "keys": ["agent/{DID}/manifesto", "agent/{DID}/preferences"]
+    }
+  }
+}
+```
+
+## Role in the Architecture
+
+Ensue serves two distinct roles in Delibera:
+
+1. **Memory cache** -- fast encrypted storage for agent identity, preferences, and decision history (read at deliberation start, written at end)
+2. **Coordination bus** -- task dispatch between coordinator and workers (task configs, worker statuses, vote results)
+
+The coordination bus keys use a different prefix (`coordination/`) and are not encrypted, since they contain operational state rather than private agent memory.
+
+## Key Files
+
+| File | Role |
+|---|---|
+| `worker-agent/src/storacha/local-crypto.ts` | AES-256-GCM encrypt/decrypt for Ensue values |
+| `worker-agent/src/storacha/profile-client.ts` | Read/write orchestration with encryption |
+| `shared/src/ensue-client.ts` | JSON-RPC client for Ensue API |

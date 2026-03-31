@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getCoordinatorsForAccount, type RegistryCoordinator } from "@/lib/api";
 
 interface ConfigScreenProps {
   accountId: string;
@@ -16,8 +17,16 @@ export default function ConfigScreen({ accountId, loading, onDeploy }: ConfigScr
   const [name, setName] = useState("");
   const [minWorkers, setMinWorkers] = useState(1);
   const [maxWorkers, setMaxWorkers] = useState(10);
+  const [existingCoordinators, setExistingCoordinators] = useState<RegistryCoordinator[]>([]);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  useEffect(() => {
+    if (!accountId) return;
+    getCoordinatorsForAccount(accountId).then(setExistingCoordinators);
+  }, [accountId]);
 
   const canDeploy = name.length >= 2 && minWorkers >= 1 && maxWorkers >= minWorkers;
+  const showBanner = existingCoordinators.length > 0 && !bannerDismissed;
 
   return (
     <div className="rounded border border-[#00ff41]/10 bg-[#0a0f0a]/80 p-6 terminal-card">
@@ -27,6 +36,20 @@ export default function ConfigScreen({ accountId, loading, onDeploy }: ConfigScr
       <p className="text-[10px] text-zinc-600 mb-6 font-mono">
         Set a name and worker pool size. Identity keys are generated automatically.
       </p>
+
+      {showBanner && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded px-3 py-2.5 bg-amber-950/40 border border-amber-800/40">
+          <p className="text-[10px] text-amber-400 font-mono">
+            You already have {existingCoordinators.length > 1 ? `${existingCoordinators.length} coordinators` : "a coordinator"} registered ({existingCoordinators.map(c => c.account_id || c.coordinator_did.slice(8, 16) + "…").join(", ")}). Deploying another will create a separate coordinator with its own contract and workers.
+          </p>
+          <button
+            onClick={() => setBannerDismissed(true)}
+            className="text-amber-600 hover:text-amber-400 font-mono text-[10px] shrink-0"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="space-y-4">
         {/* Coordinator name */}

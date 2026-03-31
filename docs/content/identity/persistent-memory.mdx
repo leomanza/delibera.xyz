@@ -1,0 +1,96 @@
+---
+title: "Persistent Memory"
+description: "How Delibera agents accumulate and persist knowledge across deliberations"
+order: 1
+---
+
+# Persistent Memory
+
+Delibera agents are not stateless. Each worker accumulates knowledge, preferences, values, and decision history over time. This memory is loaded at the start of every deliberation and updated at the end, giving each agent a consistent identity across proposals.
+
+## Two-Layer Persistence
+
+Memory is stored in two independent layers, each serving a different purpose:
+
+| Layer | Encryption | Role | Speed |
+|---|---|---|---|
+| **Ensue** | AES-256-GCM (local key) | Primary read/write cache | Fast (SSE) |
+| **Storacha** | Lit Protocol threshold encryption | Decentralized backup on IPFS/Filecoin | Slow (IPFS gateway) |
+
+Neither layer alone is sufficient. Ensue provides fast, reliable reads but is not decentralized. Storacha is decentralized and content-addressed but IPFS gateway reads are unreliable. The combination gives both speed and durability.
+
+## Read Order
+
+When a worker loads its memory (manifesto, preferences, decisions, knowledge), it tries sources in priority order:
+
+1. **In-memory cache** -- already loaded this session
+2. **Ensue AES-encrypted cache** -- fast, private, reliable
+3. **Storacha IPFS** -- cold start or disaster recovery (slow, may fail)
+4. **Blank identity** -- new worker with no history; owner fills in via app
+
+<MermaidDiagram chart={`
+flowchart TD
+    A[Load Memory] --> B{In-memory cache?}
+    B -- yes --> Z[Return cached]
+    B -- no --> C{Ensue has data?}
+    C -- yes --> D[Decrypt AES-256-GCM]
+    D --> Z
+    C -- no --> E{Storacha CID in Ensue?}
+    E -- yes --> F[Retrieve from IPFS gateway]
+    F --> G[Decrypt via Lit Protocol]
+    G --> H[Repopulate Ensue cache]
+    H --> Z
+    E -- no --> I[Return blank identity]
+`} />
+
+## Write Order
+
+When a worker saves updated memory after a deliberation:
+
+1. **Storacha** -- encrypt via Lit Protocol and upload to IPFS/Filecoin. Store the resulting CID in Ensue.
+2. **Ensue** -- encrypt the JSON data with AES-256-GCM and write as a cache entry.
+
+Both writes are fire-and-forget with error logging. A failure in one layer does not block the other.
+
+<MermaidDiagram chart={`
+flowchart LR
+    A[Save Memory] --> B[Encrypt + Upload to Storacha]
+    B --> C[Store CID in Ensue]
+    A --> D[AES-256-GCM encrypt]
+    D --> E[Write to Ensue cache]
+`} />
+
+## What Gets Persisted
+
+The `StorachaProfileClient` manages four independent data sections, each stored under DID-prefixed Ensue keys:
+
+| Section | Ensue Key | Description |
+|---|---|---|
+| Manifesto | `agent/{DID}/manifesto` | Name, role, values, guidelines |
+| Preferences | `agent/{DID}/preferences` | Voting weights, knowledge notes |
+| Decisions | `agent/{DID}/decisions` | Last 20 decision records (vote + reasoning) |
+| Knowledge | `agent/{DID}/knowledge` | Accumulated knowledge notes |
+
+Each section also has a `_cid` key (e.g., `agent/{DID}/manifesto_cid`) that stores the Storacha CID for cold-start recovery.
+
+## Memory in the Deliberation Cycle
+
+Memory is not static storage -- it actively shapes how each agent reasons:
+
+1. **Before deliberation**: `loadIdentity()` fetches manifesto, preferences, recent decisions, and knowledge notes
+2. **During deliberation**: The AI model receives all of this as context alongside the DAO manifesto and proposal text
+3. **After deliberation**: `saveDecision()` records the vote and reasoning; knowledge notes may be appended
+
+This means an agent that has voted on 15 previous proposals will reason differently from a fresh agent, even given the same prompt.
+
+<Callout type="info">
+Memory isolation is enforced by DID-prefixed keys and per-worker AES keys. Worker A cannot read Worker B's memory even if both share the same Ensue instance.
+</Callout>
+
+## Key Files
+
+| File | Role |
+|---|---|
+| `worker-agent/src/storacha/profile-client.ts` | Orchestrates read/write across both layers |
+| `worker-agent/src/storacha/local-crypto.ts` | AES-256-GCM encryption for Ensue cache |
+| `worker-agent/src/storacha/vault.ts` | Lit + Storacha encrypted upload/retrieval |

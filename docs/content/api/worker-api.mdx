@@ -1,0 +1,136 @@
+---
+title: "Worker API"
+order: 1
+---
+
+# Worker API
+
+Each Delibera worker exposes a small HTTP API for health checks, task execution, and status polling. Workers run on port `3001` by default (configurable via `PORT` env var).
+
+In production, workers run inside Phala TEE enclaves and are reachable via their public endpoint URL (e.g., `https://{cvm-id}.dstack-prod5.phala.network`).
+
+---
+
+<ApiMethod name="Health Check" method="GET" path="/">
+
+Returns the worker's health status and DID identity.
+
+**Response:**
+
+```json
+{
+  "message": "Worker Agent is running",
+  "status": "healthy",
+  "workerDid": "did:key:z6MkuLv3ysAUfL2nRRPUVdsxNbZqukfwBUd9eS7dzd1WWqYv",
+  "port": "3001",
+  "timestamp": "2026-03-30T12:00:00.000Z"
+}
+```
+
+The `workerDid` field is `null` until the worker has finished initialization (key derivation from `STORACHA_AGENT_PRIVATE_KEY`).
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Execute Task" method="POST" path="/api/task/execute">
+
+Start executing a deliberation task. The task runs asynchronously -- the response returns immediately.
+
+**Request body:**
+
+```json
+{
+  "taskConfig": {
+    "type": "vote",
+    "parameters": {
+      "proposal": "Should the DAO fund Project X?",
+      "proposalId": "42"
+    },
+    "timeout": 60000
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `taskConfig.type` | string | Yes | Task type: `"vote"`, `"random"`, or custom |
+| `taskConfig.parameters` | object | No | Task-specific parameters |
+| `taskConfig.parameters.proposal` | string | No | The proposal text for vote tasks |
+| `taskConfig.parameters.proposalId` | string | No | On-chain proposal ID |
+| `taskConfig.timeout` | number | No | Timeout in milliseconds (default: 60000) |
+
+**Response (202-style, task runs in background):**
+
+```json
+{
+  "message": "Task started",
+  "worker": "did:key:z6Mk...",
+  "taskType": "vote"
+}
+```
+
+<Callout type="warning">
+In production (non-LOCAL_MODE), the coordinator does NOT always send HTTP requests. Instead, it writes a pending status to Ensue and the worker picks it up via polling. Direct HTTP is used only in LOCAL_MODE.
+</Callout>
+
+**Worker result (written to Ensue after completion):**
+
+```json
+{
+  "workerId": "did:key:z6Mk...",
+  "taskType": "vote",
+  "output": {
+    "value": 1,
+    "vote": "Approved",
+    "reasoning": "The proposal aligns with the DAO manifesto...",
+    "computedAt": "2026-03-30T12:00:00Z"
+  },
+  "processingTime": 4200
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Task Status" method="GET" path="/api/task/status">
+
+Returns the current task execution state from Ensue.
+
+**Response:**
+
+```json
+{
+  "status": "completed",
+  "timestamp": 1711800000000
+}
+```
+
+| Status | Description |
+|---|---|
+| `idle` | No task running |
+| `pending` | Task assigned, not yet started |
+| `processing` | Task actively executing |
+| `completed` | Task finished successfully |
+| `failed` | Task failed (check Ensue for error) |
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Task Health" method="GET" path="/api/task/health">
+
+Simple health check for the task subsystem.
+
+**Response:**
+
+```json
+{
+  "healthy": true,
+  "worker": "did:key:z6Mk...",
+  "timestamp": "2026-03-30T12:00:00.000Z"
+}
+```
+
+</ApiMethod>

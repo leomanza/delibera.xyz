@@ -1,0 +1,99 @@
+---
+title: "Getting Started"
+description: "Run a local Delibera cluster — coordinator, workers, and frontend — in under five minutes."
+order: 1
+---
+
+# Getting Started
+
+This guide gets a local Delibera cluster running on your machine. You will have a coordinator, one or more workers, and the frontend dashboard.
+
+## Prerequisites
+
+- **Node.js 20+** (LTS recommended)
+- **Rust** (stable + nightly) — for building NEAR smart contracts
+- **NEAR testnet account** — create one at [wallet.testnet.near.org](https://wallet.testnet.near.org)
+
+<Callout type="tip">
+You do not need Rust or a NEAR account if you only want to run the off-chain components in `LOCAL_MODE`.
+</Callout>
+
+## Clone and Configure
+
+```bash
+git clone https://github.com/your-org/near-shade-coordination.git
+cd near-shade-coordination
+```
+
+Copy the example environment files for both the coordinator and worker agent:
+
+```bash
+cp coordinator/.env.example coordinator/.env
+cp worker-agent/.env.example worker-agent/.env
+```
+
+Edit each `.env` file with your credentials:
+
+```bash
+# Required for both coordinator and worker
+NEAR_ACCOUNT_ID=yourname.testnet
+NEAR_SEED_PHRASE="your twelve word seed phrase here"
+
+# Ensue shared state
+ENSUE_API_KEY=your-ensue-api-key
+
+# NEAR AI reasoning
+NEAR_AI_API_KEY=your-near-ai-api-key
+```
+
+<Callout type="warning">
+Never commit `.env` files. They are already in `.gitignore`, but double-check before pushing.
+</Callout>
+
+## Run the Cluster
+
+A single script starts everything:
+
+```bash
+./run-dev.sh
+```
+
+This launches:
+
+| Service | Port | Description |
+|---|---|---|
+| Coordinator | 3000 | Dispatches proposals, aggregates votes |
+| Worker 1 | 3001 | First AI deliberation agent |
+| Frontend | 3004 | Next.js dashboard |
+
+To run multiple workers:
+
+```bash
+WORKER_COUNT=3 ./run-dev.sh
+```
+
+Workers will bind to ports 3001, 3002, and 3003.
+
+## Local Mode
+
+By default, `LOCAL_MODE=true` is set in development. This skips TEE attestation and on-chain contract calls, letting you iterate without a NEAR account or Phala deployment.
+
+<Callout type="info">
+In `LOCAL_MODE`, the coordinator stores state in memory instead of on-chain. Proposals and votes are ephemeral.
+</Callout>
+
+## Verify It Works
+
+Check that a worker is healthy:
+
+```bash
+curl http://localhost:3001/
+```
+
+You should get a JSON response indicating the worker is running. Open `http://localhost:3004` in your browser to access the dashboard.
+
+## Next Steps
+
+- Read [How It Works](/overview/how-it-works) to understand the full deliberation flow.
+- See the [Architecture](/architecture) section for a deeper dive into coordinator, workers, and contracts.
+- Deploy a worker to Phala TEE using the [Deployment Guide](/guides).

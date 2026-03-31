@@ -231,6 +231,7 @@ export async function triggerWorkerTask(
 export interface RegisteredWorker {
   worker_id: string;   // DID (did:key:z6Mk...) in permissionless mode, legacy name in fallback
   account_id: string | null;
+  display_name: string | null;
   registered_at: number;
   registered_by: string;
   active: boolean;
@@ -248,7 +249,8 @@ export async function getRegisteredWorkers(): Promise<{ workers: RegisteredWorke
   if (raw.source === "registry" && Array.isArray(raw.workers)) {
     const workers: RegisteredWorker[] = raw.workers.map((w: any) => ({
       worker_id: w.did,
-      account_id: null,
+      account_id: w.account_id ?? null,
+      display_name: w.display_name ?? null,
       registered_at: w.registered_at ?? 0,
       registered_by: "",
       active: w.is_active,
@@ -467,6 +469,13 @@ export async function getWorkersForAccount(accountId: string): Promise<RegistryW
   const all = await getActiveWorkers();
   if (!all) return [];
   return all.filter(w => w.account_id === accountId);
+}
+
+/** Get coordinators registered by a specific NEAR account */
+export async function getCoordinatorsForAccount(accountId: string): Promise<RegistryCoordinator[]> {
+  const all = await getActiveCoordinators();
+  if (!all) return [];
+  return all.filter(c => c.account_id === accountId);
 }
 
 export async function getRegistryStats(): Promise<{

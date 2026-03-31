@@ -1,0 +1,73 @@
+---
+title: "NEAR AI Integration"
+order: 0
+---
+
+# NEAR AI Integration
+
+NEAR AI provides the reasoning layer for Delibera. Every worker delegates its vote decision to a large language model running on NEAR AI infrastructure, then captures a cryptographic proof that the model produced the output.
+
+## API
+
+NEAR AI exposes an **OpenAI-compatible** REST API:
+
+```
+Base URL: https://cloud-api.near.ai/v1
+Model:    deepseek-ai/DeepSeek-V3.1
+```
+
+Workers authenticate with a `NEAR_AI_API_KEY` (or legacy `NEAR_API_KEY`) passed as a Bearer token. The client is a standard OpenAI SDK instance pointed at the NEAR AI base URL:
+
+```ts
+import { OpenAI } from 'openai';
+
+const openai = new OpenAI({
+  baseURL: 'https://cloud-api.near.ai/v1',
+  apiKey: process.env.NEAR_AI_API_KEY,
+});
+```
+
+**Source:** `worker-agent/src/workers/ai-voter.ts`
+
+## What Happens During Deliberation
+
+When a worker receives a proposal, it constructs a prompt containing three pieces of context:
+
+1. **Agent identity** -- the worker's persistent memory (values, past decisions, voting weights) loaded from encrypted Ensue storage.
+2. **DAO manifesto** -- fetched from the coordinator contract via an RPC view call.
+3. **Proposal text** -- the specific proposal to vote on.
+
+The worker sends this as a chat completion request with a forced tool call (`dao_vote`), receives a structured vote and reasoning, then fetches a verification proof from the NEAR AI signature endpoint.
+
+<MermaidDiagram chart={`
+sequenceDiagram
+    participant W as Worker
+    participant E as Ensue
+    participant C as NEAR Contract
+    participant AI as NEAR AI
+
+    W->>E: Load persistent memory
+    W->>C: Fetch DAO manifesto (view call)
+    W->>AI: Chat completion (manifesto + proposal + identity)
+    AI-->>W: dao_vote tool call (vote + reasoning)
+    W->>AI: GET /v1/signature/{chat_id}
+    AI-->>W: ECDSA verification proof
+    W->>E: Store encrypted reasoning
+`} />
+
+## Authentication
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEAR_AI_API_KEY` | Yes | Bearer token for NEAR AI API |
+| `NEAR_API_KEY` | Fallback | Legacy variable name (same value) |
+
+<Callout type="warning">
+The API key authenticates the worker to NEAR AI. It does not grant access to other workers' data or to the coordinator. Each worker should use its own key.
+</Callout>
+
+## Model Selection
+
+Delibera uses `deepseek-ai/DeepSeek-V3.1` for all deliberations. The model is specified in the chat completion request and also passed to the verification endpoint to fetch the correct signing key.
+
+The model runs inside NEAR AI's TEE infrastructure (Intel TDX), which means an attestation report can link the `signing_address` back to verified hardware. See [Verification & Proofs](/near-ai/verification) for details.

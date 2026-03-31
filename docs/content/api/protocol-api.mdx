@@ -1,0 +1,399 @@
+---
+title: "Protocol API"
+order: 3
+---
+
+# Protocol API
+
+The Protocol API handles one-click provisioning of coordinators and workers, registry queries, and agent endpoint management. It runs on port `3005` locally and is deployed at:
+
+```
+https://protocol-api-production.up.railway.app
+```
+
+---
+
+## Provisioning
+
+<ApiMethod name="Provision Coordinator" method="POST" path="/api/provision/coordinator">
+
+Start a new coordinator provisioning job. This generates a DID identity, creates a Storacha delegation, provisions an Ensue org for coordination memory, and deploys to a Phala TEE enclave.
+
+**Request body:**
+
+```json
+{
+  "displayName": "My DAO Coordinator",
+  "nearAccount": "mydao.testnet",
+  "minWorkers": 1,
+  "maxWorkers": 10,
+  "contractAddress": "mydao.coord-factory.agents-coordinator.testnet"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `displayName` | string | Yes | Human-readable name |
+| `nearAccount` | string | Yes | NEAR account that will sign registry transactions |
+| `minWorkers` | number | No | Minimum workers for quorum (default: 1) |
+| `maxWorkers` | number | No | Maximum workers allowed (default: 10) |
+| `contractAddress` | string | No | Factory-created coordinator contract address |
+
+**Response:**
+
+```json
+{
+  "jobId": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "status": "provisioning"
+}
+```
+
+Poll `/api/provision/status/:jobId` to track progress.
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Provision Worker" method="POST" path="/api/provision/worker">
+
+Start a managed worker provisioning job. Generates identity, creates a UCAN delegation scoped to the coordinator's Storacha space, and deploys to Phala TEE.
+
+**Request body:**
+
+```json
+{
+  "coordinatorDid": "did:key:z6MktnLCM9uGL4j8VSMinpV13BUYwss4R1fjcq2DiLmyjF7M",
+  "displayName": "Worker Alpha",
+  "nearAccount": "alice.testnet"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `coordinatorDid` | string | Yes | DID of the coordinator to join |
+| `displayName` | string | Yes | Human-readable worker name |
+| `nearAccount` | string | Yes | NEAR account for registry transaction |
+
+**Response:**
+
+```json
+{
+  "jobId": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+  "status": "provisioning"
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Provision External Worker" method="POST" path="/api/provision/external-worker">
+
+Generate a DID identity for an external (self-hosted) worker. No Phala deployment or Storacha provisioning -- the agent owner manages their own infrastructure.
+
+**Request body:**
+
+```json
+{
+  "displayName": "My Custom Worker",
+  "nearAccount": "bob.testnet",
+  "endpointUrl": "https://my-worker.example.com",
+  "coordinatorDid": "did:key:z6MktnLCM9uGL4j8VSMinpV13BUYwss4R1fjcq2DiLmyjF7M"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `displayName` | string | Yes | Human-readable worker name |
+| `nearAccount` | string | Yes | NEAR account for registry transaction |
+| `endpointUrl` | string | Yes | Public HTTPS URL where the worker is reachable |
+| `coordinatorDid` | string | Yes | DID of the coordinator to join |
+
+**Response:**
+
+```json
+{
+  "workerDid": "did:key:z6Mk...",
+  "privateKeyString": "MBase64EncodedPrivateKey..."
+}
+```
+
+<Callout type="warning">
+The `privateKeyString` is returned only once. Store it securely -- it is the worker's identity key.
+</Callout>
+
+</ApiMethod>
+
+---
+
+## Job Status
+
+<ApiMethod name="Poll Job Status" method="GET" path="/api/provision/status/:jobId">
+
+Poll the progress of a provisioning job. Secrets (private keys, Ensue API keys) are only revealed once the job reaches `awaiting_near_signature` or `complete` status.
+
+**Response (in progress):**
+
+```json
+{
+  "jobId": "a1b2c3d4-...",
+  "role": "worker",
+  "status": "deploying_phala",
+  "step": "Deploying to Phala TEE",
+  "workerDid": "did:key:z6Mk...",
+  "coordinatorDid": "did:key:z6Mk...",
+  "displayName": "Worker Alpha",
+  "nearAccount": "alice.testnet"
+}
+```
+
+**Response (ready for wallet signature):**
+
+```json
+{
+  "jobId": "a1b2c3d4-...",
+  "role": "worker",
+  "status": "awaiting_near_signature",
+  "step": "Waiting for NEAR wallet signature",
+  "workerDid": "did:key:z6Mk...",
+  "storachaPrivateKey": "MBase64EncodedKey...",
+  "phalaEndpoint": "https://abc123.dstack-prod5.phala.network",
+  "cvmId": "abc123",
+  "dashboardUrl": "https://cloud.phala.network/dashboard/cvms/abc123",
+  "coordinatorDid": "did:key:z6Mk...",
+  "displayName": "Worker Alpha",
+  "nearAccount": "alice.testnet"
+}
+```
+
+**Provisioning status values:**
+
+| Status | Description |
+|---|---|
+| `generating_identity` | Creating Ed25519 keypair |
+| `creating_space` | Creating Storacha UCAN delegation |
+| `provisioning_ensue` | Creating Ensue org (coordinator only) |
+| `preparing_phala` | Building deployment config |
+| `deploying_phala` | Submitting to Phala Cloud |
+| `waiting_for_url` | Waiting for TEE container to be healthy (3-10 min) |
+| `awaiting_near_signature` | Ready for wallet transaction |
+| `registering` | Processing registration |
+| `complete` | Fully provisioned and registered |
+| `failed` | Deployment failed (check `error` field) |
+
+</ApiMethod>
+
+---
+
+## Registration
+
+<ApiMethod name="Complete Worker Registration" method="POST" path="/api/provision/register">
+
+Mark a worker provisioning job as complete after the user signs the NEAR registry transaction in their wallet.
+
+**Request body:**
+
+```json
+{
+  "jobId": "b2c3d4e5-...",
+  "txHash": "ABC123..."
+}
+```
+
+**Response:**
+
+```json
+{
+  "status": "complete",
+  "workerDid": "did:key:z6Mk...",
+  "phalaEndpoint": "https://abc123.dstack-prod5.phala.network",
+  "txHash": "ABC123..."
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Complete Coordinator Registration" method="POST" path="/api/provision/coordinator-register">
+
+Mark a coordinator provisioning job as complete after both wallet transactions (factory deploy + registry register) are signed.
+
+**Request body:**
+
+```json
+{
+  "jobId": "a1b2c3d4-...",
+  "contractAddress": "mydao.coord-factory.agents-coordinator.testnet",
+  "txHash": "DEF456..."
+}
+```
+
+**Response:**
+
+```json
+{
+  "status": "complete",
+  "coordinatorDid": "did:key:z6Mk...",
+  "phalaEndpoint": "https://xyz789.dstack-prod5.phala.network",
+  "contractAddress": "mydao.coord-factory.agents-coordinator.testnet",
+  "txHash": "DEF456...",
+  "ensueOrgName": "delibera-mydao-abc1",
+  "ensueClaimUrl": "https://app.ensue-network.ai/claim/...",
+  "ensueVerificationCode": "V3R1FY"
+}
+```
+
+</ApiMethod>
+
+---
+
+## Agent Endpoints
+
+<ApiMethod name="List All Agent Endpoints" method="GET" path="/api/agents/endpoints">
+
+Get all agent endpoint URLs from the on-chain registry contract. Includes both coordinators and workers.
+
+**Response:**
+
+```json
+{
+  "agents": {
+    "did:key:z6Mk...coordinator": {
+      "endpoint": "https://xyz789.dstack-prod5.phala.network",
+      "type": "coordinator",
+      "cvmId": "xyz789"
+    },
+    "did:key:z6Mk...worker1": {
+      "endpoint": "https://abc123.dstack-prod5.phala.network",
+      "type": "worker",
+      "cvmId": "abc123"
+    }
+  },
+  "timestamp": "2026-03-30T12:00:00.000Z"
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Get Agent Endpoint" method="GET" path="/api/agents/:agentId/endpoint">
+
+Get a specific agent's endpoint URL from the registry.
+
+**Response:**
+
+```json
+{
+  "agentId": "did:key:z6Mk...",
+  "endpoint": "https://abc123.dstack-prod5.phala.network",
+  "cvmId": "abc123"
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Update Agent Endpoint" method="PUT" path="/api/agents/:agentId/endpoint">
+
+Update an agent's endpoint URL on the registry contract (requires server-side NEAR CLI credentials).
+
+**Request body:**
+
+```json
+{
+  "endpoint": "https://new-endpoint.example.com",
+  "cvmId": "new-cvm-id",
+  "type": "worker"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `endpoint` | string | Yes | New public endpoint URL |
+| `cvmId` | string | No | Phala CVM ID |
+| `type` | string | No | `"worker"` or `"coordinator"` (default: `"worker"`) |
+
+**Response:**
+
+```json
+{
+  "success": true,
+  "agentId": "did:key:z6Mk...",
+  "endpoint": "https://new-endpoint.example.com"
+}
+```
+
+</ApiMethod>
+
+---
+
+## Workers (On-Chain)
+
+<ApiMethod name="List Registered Workers" method="GET" path="/api/workers/registered">
+
+Get all workers registered on the coordinator's on-chain contract.
+
+**Response:**
+
+```json
+{
+  "workers": [
+    {
+      "worker_did": "did:key:z6Mk...",
+      "account_id": "alice.testnet",
+      "endpoint_url": "https://abc123.dstack-prod5.phala.network",
+      "is_active": true,
+      "registered_at": 1711800000000
+    }
+  ],
+  "activeCount": 1
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Register Worker" method="POST" path="/api/workers/register">
+
+Register a new worker on the coordinator's on-chain contract.
+
+**Request body:**
+
+```json
+{
+  "workerId": "did:key:z6Mk...",
+  "accountId": "alice.testnet"
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Worker did:key:z6Mk... registered",
+  "workerId": "did:key:z6Mk...",
+  "accountId": "alice.testnet"
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Remove Worker" method="DELETE" path="/api/workers/:workerId">
+
+Remove a worker from the on-chain registry.
+
+**Response:**
+
+```json
+{
+  "message": "Worker did:key:z6Mk... removed"
+}
+```
+
+</ApiMethod>

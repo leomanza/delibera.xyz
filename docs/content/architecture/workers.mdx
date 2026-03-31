@@ -1,0 +1,113 @@
+---
+title: Workers
+order: 2
+---
+
+# Worker Agents
+
+Worker agents are independent AI-powered decision makers. Each has a sovereign `did:key` identity and accumulates persistent memory over time. Workers run on ports **3001-300N**.
+
+**Source:** `worker-agent/src/workers/task-handler.ts`, `worker-agent/src/workers/ai-voter.ts`
+
+## Worker Types
+
+### Managed Workers (Phala TEE)
+
+Deployed via the one-click buy flow (`/buy`). The provisioning API generates an ed25519 keypair, creates a UCAN delegation, and deploys a Phala CVM with all environment variables pre-configured. The user only needs to sign a `register_worker` transaction (0.1 NEAR deposit).
+
+- Docker image: `leomanza/delibera-worker:latest`
+- Runtime: Phala Intel TDX
+- Identity generated server-side via `@ucanto/principal/ed25519`
+
+### External Workers (Self-Hosted)
+
+Any agent can join by reading the coordinator's `skill.md`, generating its own keypair, and calling `register_worker` on the registry contract. No approval needed.
+
+- Runtime: any environment (no TEE required)
+- Identity: self-generated `did:key` from ed25519 keypair
+- Registration: 0.1 NEAR deposit to `registry.agents-coordinator.testnet`
+
+## DID Identity
+
+Each worker's identity is a `did:key` derived from an ed25519 private key stored in `STORACHA_AGENT_PRIVATE_KEY`. This DID is used as:
+
+- The Ensue namespace key (`coordination/tasks/{did}/...`)
+- The Storacha UCAN subject (scoped storage access)
+- The registry identifier (on-chain worker record)
+- The agent's persistent identity across sessions
+
+## Polling Loop
+
+Workers discover tasks by polling Ensue, not by receiving HTTP calls from the coordinator:
+
+<MermaidDiagram chart={`
+sequenceDiagram
+    participant Worker
+    participant Ensue
+    participant Contract as NEAR Contract
+    participant AI as NEAR AI
+
+    loop Every 3 seconds
+        Worker->>Ensue: Read coordination/tasks/{did}/status
+        alt status == "pending"
+            Worker->>Ensue: Set status = "processing"
+            Worker->>Ensue: Read task config
+            Worker->>Contract: Fetch manifesto (RPC view call)
+            Worker->>Worker: Load persistent memory from Storacha
+            Worker->>AI: Call DeepSeek-V3.1 with dao_vote tool
+            AI-->>Worker: {vote, reasoning}
+            Worker->>Ensue: Write result + set status = "completed"
+            Worker->>Worker: Record decision to persistent memory
+        end
+    end
+`} />
+
+<Callout type="warning">
+In production (non-LOCAL_MODE), the coordinator only writes `STATUS=pending` to Ensue. Workers **must** run `startWorkerPollingLoop()` to detect and process tasks.
+</Callout>
+
+## Deliberation Flow
+
+When a worker detects a pending task:
+
+1. **Load persistent memory** -- `StorachaProfileClient.loadIdentity()` reads the agent's manifesto, preferences, recent decisions, and knowledge notes from Storacha (with Ensue as a fast cache)
+2. **Fetch DAO manifesto** -- RPC view call to `coordinator.agents-coordinator.testnet`
+3. **Call NEAR AI** -- DeepSeek-V3.1 with a system prompt incorporating the manifesto and the agent's accumulated knowledge. The model is forced to respond via the `dao_vote` tool call
+4. **Get verification proof** -- ECDSA-signed attestation from NEAR AI (`GET /v1/signature/{chat_id}`)
+5. **Write result** -- `{workerId, vote, reasoning, computedAt, processingTime}` to Ensue
+6. **Update memory** -- Record the decision to the agent's persistent memory in Storacha
+
+## Persistent Memory
+
+<Callout type="tip">
+Storacha is the agent's **persistent memory**, not just an archive. Agents develop distinct perspectives shaped by the individuals or communities they represent, making governance more nuanced.
+</Callout>
+
+Memory is organized per-worker in Storacha spaces:
+
+| Data | Description | Ensue Key (CID pointer) |
+|------|-------------|------------------------|
+| Manifesto | Agent's values and guidelines | `agent/{did}/manifesto_cid` |
+| Preferences | Voting tendencies and priorities | `agent/{did}/preferences_cid` |
+| Decisions | Last 20 voting records | `agent/{did}/decisions_cid` |
+| Knowledge | Human-injected context notes | `agent/{did}/knowledge_cid` |
+
+**Read order:** Storacha (primary) -> Ensue cache (fast fallback) -> empty (new worker)
+
+**Write order:** Storacha first (persistent), then Ensue cache (fast reads)
+
+All data is encrypted with AES-256-GCM in Ensue and Lit threshold encryption in Storacha. Humans with UCAN permissions over a worker's Storacha space can inject knowledge between deliberations.
+
+## Key Environment Variables
+
+| Variable | Purpose |
+|----------|---------|
+| `PORT` | Service port (3001, 3002, etc.) |
+| `ENSUE_API_KEY` / `ENSUE_TOKEN` | Ensue access credentials |
+| `NEAR_API_KEY` | NEAR AI API access |
+| `STORACHA_AGENT_PRIVATE_KEY` | Worker's sovereign identity key |
+| `STORACHA_DELEGATION_PROOF` | UCAN delegation for Storacha space |
+| `COORDINATOR_DID` | Coordinator to register with |
+| `WORKER_ENDPOINT_URL` | Public endpoint for health checks |
+| `REGISTRY_CONTRACT_ID` | Registry contract address |
+| `WORKER_DISPLAY_NAME` | Human-readable name (stored in Ensue) |

@@ -1,0 +1,92 @@
+---
+title: "How It Works"
+description: "End-to-end deliberation flow — from proposal creation to on-chain result — explained step by step."
+order: 2
+---
+
+# How It Works
+
+A proposal enters the system. AI workers deliberate privately. An aggregate result lands on-chain. Here is how each step works.
+
+## The Flow
+
+<MermaidDiagram chart={`
+sequenceDiagram
+    participant H as Human / DAO
+    participant C as Coordinator
+    participant W as Workers (1..N)
+    participant AI as NEAR AI
+    participant Chain as NEAR Protocol
+
+    H->>C: Create proposal
+    C->>Chain: Register proposal on-chain
+    C->>W: Dispatch proposal via Ensue
+    W->>W: Load persistent memory (Storacha)
+    W->>AI: Deliberate (manifesto + memory + proposal)
+    AI-->>W: Reasoned vote + signature
+    W->>W: Store reasoning encrypted (Ensue + Storacha)
+    W->>C: Submit encrypted vote
+    C->>C: Aggregate once quorum reached
+    C->>Chain: Publish aggregate tally
+`} />
+
+## Step by Step
+
+### 1. Proposal Creation
+
+A human (or another contract) creates a proposal through the coordinator. The proposal is registered on-chain with a voting configuration — minimum workers required and quorum threshold.
+
+### 2. Dispatch
+
+The coordinator writes the proposal to Ensue, the shared state bus. All registered workers poll Ensue for new work. There is no direct HTTP between coordinator and workers — Ensue is the coordination layer.
+
+<Callout type="info">
+In Phala TEE deployments, the coordinator sets status to `pending` in Ensue. Workers discover proposals by polling — no inbound connections needed.
+</Callout>
+
+### 3. Memory Load
+
+Before deliberating, each worker loads its persistent identity from Storacha. This includes accumulated knowledge from past proposals, learned preferences, and any human-provided context. Workers are not blank slates — they carry history.
+
+The read order is: AES-encrypted Ensue cache (fast) then Storacha IPFS (cold fallback) then blank state (first run).
+
+### 4. Deliberation
+
+The worker sends the proposal text, the DAO manifesto (fetched from the on-chain contract), and its own persistent memory to NEAR AI. The LLM reasons through the proposal and returns a structured vote using the `dao_vote` tool, along with an ECDSA signature proving the reasoning chain.
+
+Each worker deliberates independently. No worker sees another worker's reasoning.
+
+### 5. Private Vote Submission
+
+The worker's individual reasoning is encrypted with AES-256-GCM and stored in Ensue. A backup is written to Storacha with Lit threshold encryption. The encrypted vote is submitted to the coordinator.
+
+<Callout type="tip">
+Individual reasoning is never stored in plaintext anywhere. AES keys are derived per-worker from their private key material.
+</Callout>
+
+### 6. Aggregation
+
+Once enough workers have voted (meeting the quorum defined in the proposal's voting config), the coordinator tallies the results. Only the aggregate — approve, reject, or abstain counts — is computed.
+
+### 7. On-Chain Publication
+
+The coordinator publishes the aggregate tally to the NEAR smart contract. The on-chain record shows the final counts but reveals nothing about how any individual worker voted.
+
+## Privacy Model
+
+| Data | Where Stored | Who Can Read |
+|---|---|---|
+| Proposal text | On-chain + Ensue | Public |
+| Individual reasoning | Ensue (AES-encrypted) + Storacha (Lit-encrypted) | Only the originating worker |
+| Individual vote | Coordinator memory (ephemeral) | Coordinator during aggregation only |
+| Aggregate tally | On-chain | Public |
+
+## Persistent Identity
+
+Workers are not disposable. Each worker has a DID (Decentralized Identifier) and a dedicated Storacha space. Over successive proposals, a worker builds up context — understanding of the DAO's values, precedent from past votes, domain knowledge fed by its operator.
+
+This means the quality of deliberation improves over time. A worker that has participated in twenty proposals reasons differently than one on its first run.
+
+<Callout type="warning">
+Persistent memory is powerful but requires care. If a worker's Storacha space is corrupted or its encryption keys are lost, that accumulated knowledge is gone. Back up your worker's key material.
+</Callout>

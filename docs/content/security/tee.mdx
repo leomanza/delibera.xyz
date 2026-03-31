@@ -1,0 +1,98 @@
+---
+title: "TEE (Phala Network)"
+description: "Trusted Execution Environments for secure worker and coordinator operation"
+order: 1
+---
+
+# TEE (Phala Network)
+
+Delibera runs workers and coordinators inside Phala Network's Confidential Virtual Machines (CVMs), which use Intel SGX to provide hardware-enforced execution integrity.
+
+## What SGX Guarantees
+
+Intel SGX enclaves provide three properties:
+
+| Property | Meaning |
+|----------|---------|
+| **Code integrity** | The enclave runs exactly the code that was measured at launch — no runtime tampering |
+| **Memory isolation** | Enclave memory is encrypted in hardware; the host OS, hypervisor, and other processes cannot read it |
+| **Remote attestation** | A third party can verify which code is running inside the enclave via a cryptographic attestation report |
+
+Together, these mean a Phala host operator cannot inspect agent memory, modify voting logic, or forge attestation reports.
+
+## Phala CVM Architecture
+
+Phala's CVM wraps standard Docker containers in an SGX enclave. The agent code runs unmodified — the TEE boundary is transparent to the application. The `dstack.sock` Unix socket provides the attestation and key derivation interface.
+
+<MermaidDiagram chart={`
+graph LR
+    subgraph HOST["Host Machine"]
+        subgraph SGX["SGX Enclave (Phala CVM)"]
+            DOCKER["Docker Container"]
+            AGENT["Worker / Coordinator Agent"]
+            SOCK["dstack.sock"]
+            DOCKER --> AGENT
+            AGENT --> SOCK
+        end
+    end
+
+    AGENT -- "Encrypted writes" --> ENSUE["Ensue"]
+    AGENT -- "Encrypted uploads" --> STORACHA["Storacha"]
+    AGENT -- "On-chain calls" --> NEAR["NEAR"]
+`} />
+
+## Docker Requirements
+
+<Callout type="warning">
+All three of these Docker Compose settings are **mandatory** for Phala deployment. Missing any one will cause the container to fail silently or lose TEE guarantees.
+</Callout>
+
+```yaml
+services:
+  worker:
+    image: leomanza/delibera-worker:latest
+    platform: linux/amd64          # SGX requires x86_64
+    volumes:
+      - /var/run/dstack.sock:/var/run/dstack.sock  # Attestation interface
+    restart: always                 # Auto-recover from transient TEE faults
+```
+
+| Setting | Why Required |
+|---------|-------------|
+| `platform: linux/amd64` | SGX is an Intel x86 feature; ARM images will not execute |
+| `volumes: dstack.sock` | The agent uses this socket for remote attestation and key derivation |
+| `restart: always` | Phala CVMs may restart during SGX re-initialization; the agent must recover automatically |
+
+## Endpoint Provisioning
+
+After deploying a container to Phala, the endpoint URL is not immediately available. Phala provisions the enclave, measures the image, and assigns a public endpoint.
+
+- **Typical wait**: 3-10+ minutes
+- **Polling strategy**: `watchForEndpoint()` polls up to 40 times at 15-second intervals (10 minutes total)
+- **Failure mode**: if the endpoint is not ready after 40 polls, provisioning is considered failed
+
+<Callout type="info">
+Endpoint provisioning time depends on Phala network load and SGX initialization. During peak usage, expect the upper end of the 3-10 minute range.
+</Callout>
+
+## LOCAL_MODE
+
+For development, set `LOCAL_MODE=true` to bypass all TEE requirements:
+
+- No SGX enclave — runs as a regular Node.js process
+- No `dstack.sock` required
+- No remote attestation
+- No endpoint provisioning wait
+- Coordinator and workers communicate directly
+
+<Callout type="warning">
+`LOCAL_MODE` provides **zero** execution integrity guarantees. It exists solely for development and testing. Never use it in production.
+</Callout>
+
+## Limitations
+
+TEE is not a complete security solution:
+
+- **Side-channel attacks** (e.g., speculative execution, power analysis) are a known research area for SGX. Delibera mitigates this by not relying on TEE as the sole privacy layer — encryption provides defense-in-depth.
+- **TEE does not hide network traffic patterns** — an observer can see that an agent communicated with Ensue or NEAR, though not the content (which is encrypted).
+- **The host controls availability** — a malicious host can stop the enclave, though it cannot read or modify its memory.

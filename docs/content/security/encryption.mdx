@@ -1,0 +1,110 @@
+---
+title: "Encryption"
+description: "AES-256-GCM and Lit threshold encryption protecting agent data"
+order: 2
+---
+
+# Encryption
+
+Delibera uses two encryption layers to protect agent data at rest. Each layer targets a different storage tier with different access patterns and trust assumptions.
+
+## Two-Layer Architecture
+
+| Layer | Algorithm | Storage Tier | Key Management | Purpose |
+|-------|-----------|-------------|----------------|---------|
+| **Hot** | AES-256-GCM | Ensue (real-time state) | Derived from worker private key | Fast read/write for active deliberation |
+| **Warm** | Lit threshold encryption | Storacha (persistent memory) | M-of-N Lit network nodes | Decentralized backup with no single point of trust |
+
+<MermaidDiagram chart={`
+graph LR
+    AGENT["Worker Agent"]
+
+    subgraph HOT["Hot Layer (Ensue)"]
+        AES["AES-256-GCM"]
+        ENSUE["Ensue Store"]
+    end
+
+    subgraph WARM["Warm Layer (Storacha)"]
+        LIT["Lit Threshold Encrypt"]
+        STOR["Storacha + Filecoin"]
+    end
+
+    AGENT -- "HMAC-SHA256 derived key" --> AES
+    AES --> ENSUE
+    AGENT -- "M-of-N key shares" --> LIT
+    LIT --> STOR
+`} />
+
+## AES-256-GCM (Ensue)
+
+The hot-layer encryption uses AES-256-GCM, a standard authenticated encryption scheme. The key is deterministically derived from the worker's Ed25519 private key:
+
+```
+STORACHA_AGENT_PRIVATE_KEY (Ed25519 seed, base64)
+        |
+        v
+HMAC-SHA256(privateKey, "delibera-ensue-cache-v1")
+        |
+        v
+256-bit AES key
+        |
+        v
+AES-256-GCM encrypt(plaintext, random 12-byte IV)
+        |
+        v
+"aes256gcm:" + base64(IV + ciphertext + authTag)
+```
+
+Key properties:
+
+- **Deterministic key derivation** — the same private key always produces the same AES key, so any instance of the worker can decrypt its own data
+- **Unique IV per write** — a random 12-byte IV prevents ciphertext reuse even for identical plaintext
+- **Authenticated** — the GCM auth tag detects any tampering with the ciphertext
+- **Prefixed format** — all encrypted values are stored with the `aes256gcm:` prefix, enabling the system to distinguish encrypted from legacy plaintext entries
+
+<Callout type="info">
+The AES key never leaves the worker process. It is derived in-memory from the private key at startup using Node.js built-in `crypto.subtle` — no external KMS is involved.
+</Callout>
+
+### Auto-Migration from Plaintext
+
+Legacy Ensue entries stored before encryption was introduced are handled transparently:
+
+1. On read, if the value lacks the `aes256gcm:` prefix, it is parsed as raw JSON (plaintext fallback)
+2. On the next write, the value is re-encrypted with AES-256-GCM
+3. Over time, all entries migrate to encrypted format without manual intervention
+
+## Lit Threshold Encryption (Storacha)
+
+The warm-layer encryption uses Lit Protocol's threshold encryption network. Data is encrypted such that M-of-N Lit nodes must cooperate to decrypt it — no single node holds the complete key.
+
+| Parameter | Value |
+|-----------|-------|
+| Network | `nagaDev` (free tier, no relay key required) |
+| Auth storage | `.lit-auth-storage-{WORKER_ID}` (per-worker isolation) |
+| Upload format | Encrypted CAR file to Storacha, with Filecoin deal for archival |
+
+<Callout type="warning">
+IPFS gateway reads for Storacha content are unreliable. The AES-encrypted Ensue layer serves as the **primary read path**. Storacha + Lit is the cold-start fallback — used only when a worker boots for the first time or its Ensue cache is cleared.
+</Callout>
+
+## Read/Write Order
+
+The two layers compose into a tiered read/write strategy:
+
+**Write path:**
+1. Encrypt with Lit threshold encryption and upload to Storacha (decentralized, durable)
+2. Encrypt with AES-256-GCM and write to Ensue (fast, reliable reads)
+
+**Read path:**
+1. Try AES-encrypted Ensue (fast, private, reliable)
+2. Fall back to Storacha via IPFS gateway + Lit decryption (cold start only)
+3. If both empty, treat as new worker (blank slate)
+
+## Key Files
+
+| File | Role |
+|------|------|
+| `worker-agent/src/storacha/local-crypto.ts` | AES-256-GCM key derivation and encrypt/decrypt |
+| `worker-agent/src/storacha/vault.ts` | Lit + Storacha encrypt/upload/download |
+| `worker-agent/src/storacha/profile-client.ts` | Orchestrates the two-layer read/write strategy |

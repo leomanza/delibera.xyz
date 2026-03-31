@@ -1,0 +1,46 @@
+---
+title: Tech Stack
+description: "Technologies powering Delibera -- on-chain governance, encrypted storage, TEE execution, and AI reasoning."
+order: 0
+---
+
+# Tech Stack
+
+Delibera composes purpose-built decentralized infrastructure across six layers. Each technology handles a distinct concern -- settlement, coordination, storage, execution, encryption, or reasoning.
+
+## Stack Overview
+
+| Technology | Role | Status |
+|---|---|---|
+| [NEAR Protocol](/tech-stack/near) | On-chain governance, smart contracts, deposits | Production |
+| [Ensue Network](/tech-stack/ensue) | Shared state, agent memory, coordination bus | Production |
+| [Storacha](/tech-stack/storacha) | Decentralized persistent storage (IPFS + Filecoin) | Production |
+| [Phala Network](/tech-stack/phala) | TEE execution (managed workers/coordinators) | Production |
+| [Lit Protocol](/tech-stack/lit) | Threshold encryption for Storacha | Production |
+| NEAR AI | AI reasoning (DeepSeek-V3.1) | Production |
+| [Zama](/tech-stack/zama) | Fully Homomorphic Encryption (blind voting) | Planned (Phase 3) |
+| Flow VRF | Verifiable random jury selection | Planned (Phase 4) |
+
+## How They Connect
+
+```
+NEAR (settlement)
+  |
+  v
+Coordinator (TypeScript, port 3000)
+  |
+  +---> Ensue (hot state, JSON-RPC 2.0 over SSE)
+  |       ^
+  |       |
+  +---> Workers (TypeScript, ports 3001-300N)
+          |
+          +---> NEAR AI (DeepSeek-V3.1 reasoning)
+          +---> Storacha + Lit (encrypted persistent memory)
+          +---> Phala TEE (production runtime)
+```
+
+On-chain proposals flow from NEAR through the coordinator to workers via Ensue. Workers reason with NEAR AI, persist memory in Storacha (encrypted via Lit), and run inside Phala TEEs in production. Only aggregate results return to the chain.
+
+<Callout type="info">
+Phase 3 adds Zama FHE for blind voting. Phase 4 adds Flow VRF for verifiable jury selection. Both are not yet implemented.
+</Callout>

@@ -1,0 +1,58 @@
+---
+title: "Storacha"
+description: "IPFS and Filecoin powered decentralized storage for agent identity"
+order: 2
+---
+
+# Storacha
+
+Storacha provides decentralized persistent storage for Delibera's agent identities and memory. Data is content-addressed on IPFS and archived to Filecoin for long-term durability.
+
+## Core Concepts
+
+**Content Addressing** -- Every piece of data gets a unique CID (Content Identifier) derived from its contents. The same data always produces the same CID, enabling verifiable retrieval without trusting a server.
+
+**Spaces** -- DID-keyed namespaces that scope storage. Each Delibera worker gets its own space, ensuring isolation and sovereignty over its data.
+
+**UCAN Delegation** -- Authorization uses User Controlled Authorization Networks. The coordinator space delegates specific capabilities to worker spaces without sharing keys.
+
+```bash
+storacha delegation create <WORKER_DID> \
+  --can 'space/blob/add' \
+  --can 'space/index/add' \
+  --can 'upload/add' \
+  --can 'upload/list' \
+  --can 'space/content/decrypt' \
+  --base64
+```
+
+## Per-Worker Spaces
+
+Each worker has a dedicated Storacha space for memory persistence:
+
+| Worker | Space DID |
+|---|---|
+| Coordinator | `did:key:z6MknNVto8CyvN9tMCGnTJ6KQbfHosnpMCfZJXHzXXMaxhiW` |
+| Worker 1 | `did:key:z6MktJXkKhgNhK1ZiecfG39zhRyn7e88jaijhSkUj5jyPKmc` |
+| Worker 2 | `did:key:z6Mkovsb6rneiFNKNvPyksvLjWxkg5mwfQ8jSK1zgPamVpnF` |
+| Worker 3 | `did:key:z6MknVJzCLxyk2M8XQitmfzdZv6KdeVHkFhaNvHZPieCfFHt` |
+
+## Client Integration
+
+`@storacha/client` is **ESM-only**. In CJS contexts, use a dynamic import wrapper:
+
+```typescript
+const dynamicImport = new Function('specifier', 'return import(specifier)');
+const { Client } = await dynamicImport('@storacha/client');
+```
+
+## Read/Write Pipeline
+
+Storacha serves as the cold-storage backup in a two-tier persistence model:
+
+1. **Write**: Lit-encrypted upload to Storacha (decentralized) + AES-encrypted write to Ensue (fast cache)
+2. **Read**: Ensue AES-encrypted (fast, reliable) -> Storacha IPFS fallback (cold start only) -> blank (new worker)
+
+<Callout type="warning">
+IPFS gateway reads can be unreliable. Delibera uses Ensue as the primary read path with Storacha as the durable fallback.
+</Callout>

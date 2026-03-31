@@ -1,0 +1,229 @@
+---
+title: "Ensue Memory API"
+order: 4
+---
+
+# Ensue Memory API
+
+Ensue is the shared coordination state layer between coordinators and workers. It uses a JSON-RPC 2.0 protocol over Server-Sent Events (SSE).
+
+**Endpoint:** `https://api.ensue-network.ai/`
+
+**Authentication:** Every request requires an `Authorization: Bearer {ENSUE_API_KEY}` header.
+
+<Callout type="info">
+Delibera provides a shared client library: `import { createEnsueClient } from '@near-shade-coordination/shared'`. The client reads `ENSUE_API_KEY` from the environment automatically.
+</Callout>
+
+---
+
+## Request Format
+
+All requests are HTTP POST with a JSON-RPC 2.0 body. Responses arrive as SSE streams. Parse the final `structuredContent` event for the result.
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "1",
+  "method": "create_memory",
+  "params": {
+    "key": "coordination/tasks/did:key:z6Mk.../status",
+    "value": "idle"
+  }
+}
+```
+
+---
+
+## Methods
+
+<ApiMethod name="create_memory" method="POST" path="/">
+
+Create a new key-value entry. Fails if the key already exists.
+
+**Params:**
+
+```json
+{
+  "key": "coordination/tasks/did:key:z6Mk.../status",
+  "value": "idle"
+}
+```
+
+**Response (in `structuredContent`):**
+
+```json
+{
+  "results": [
+    { "key": "coordination/tasks/did:key:z6Mk.../status", "value": "idle" }
+  ]
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="update_memory" method="POST" path="/">
+
+Update an existing key's value.
+
+**Params:**
+
+```json
+{
+  "key": "coordination/tasks/did:key:z6Mk.../status",
+  "value": "completed"
+}
+```
+
+**Response (in `structuredContent`):**
+
+```json
+{
+  "results": [
+    { "key": "coordination/tasks/did:key:z6Mk.../status", "value": "completed" }
+  ]
+}
+```
+
+<Callout type="warning">
+`update_memory` returns an error if the key does not exist. Always fall back to `create_memory` on first write. The shared Ensue client handles this automatically.
+</Callout>
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="read_memory" method="POST" path="/">
+
+Read the value of a single key.
+
+**Params:**
+
+```json
+{
+  "key": "coordination/tasks/did:key:z6Mk.../status"
+}
+```
+
+**Response (in `structuredContent`):**
+
+```json
+{
+  "results": [
+    { "key": "coordination/tasks/did:key:z6Mk.../status", "value": "completed" }
+  ]
+}
+```
+
+Read the value from `structuredContent.results[0].value`.
+
+<Callout type="warning">
+The response path is `structuredContent.results[].value` -- NOT `.memories`. This is a common source of bugs.
+</Callout>
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="list_keys" method="POST" path="/">
+
+List all keys matching a prefix.
+
+**Params:**
+
+```json
+{
+  "prefix": "coordination/tasks/"
+}
+```
+
+**Response (in `structuredContent`):**
+
+```json
+{
+  "keys": [
+    "coordination/tasks/did:key:z6Mk.../status",
+    "coordination/tasks/did:key:z6Mk.../result",
+    "coordination/tasks/did:key:z6Mk.../timestamp"
+  ]
+}
+```
+
+Note: `list_keys` uses `structuredContent.keys[]`, not `structuredContent.results[]`.
+
+</ApiMethod>
+
+---
+
+## Key Layout
+
+Delibera uses a structured key hierarchy in Ensue. All coordination state lives under the `coordination/` prefix.
+
+### Coordinator Keys
+
+| Key | Description |
+|---|---|
+| `coordination/coordinator/status` | Coordinator status: `idle`, `coordinating`, `tallying` |
+| `coordination/coordinator/proposal_id` | Current proposal ID being coordinated |
+| `coordination/coordinator/tally` | JSON tally result after aggregation |
+| `coordination/config/task_definition` | Current task config (JSON string) |
+
+### Per-Worker Keys
+
+Prefix: `coordination/tasks/{workerDid}/`
+
+| Key Suffix | Type | Description |
+|---|---|---|
+| `status` | string | `idle`, `pending`, `processing`, `completed`, `failed` |
+| `result` | JSON string | WorkerResult (vote, reasoning, timing) |
+| `timestamp` | string | ISO timestamp of completion |
+| `error` | string | Error message (if failed) |
+
+### Per-Proposal Archive Keys
+
+Prefix: `coordination/proposals/{proposalId}/`
+
+| Key Suffix | Description |
+|---|---|
+| `config` | Original task config |
+| `status` | Proposal status |
+| `tally` | Aggregated vote result |
+| `workers/{workerDid}/result` | Individual worker result |
+| `workers/{workerDid}/timestamp` | Worker completion time |
+
+### Agent Identity Keys
+
+| Key | Description |
+|---|---|
+| `agent/{did}/display_name` | Human-readable worker name |
+| `agent/{did}/endpoint` | Worker endpoint URL |
+
+---
+
+## Production Polling
+
+In production (non-LOCAL_MODE), workers must poll Ensue for pending tasks. The coordinator signals work by setting the worker's status to `"pending"` rather than sending an HTTP request.
+
+**Polling pattern:**
+
+1. Read `coordination/tasks/{workerDid}/status` every 3-5 seconds
+2. When status is `"pending"`, read `coordination/config/task_definition` for the task config
+3. Execute the task
+4. Write `status` = `"completed"` and `result` = WorkerResult JSON
+5. Resume polling
+
+<Callout type="warning">
+In Phala TEE production, the coordinator does NOT send HTTP requests to workers. Workers MUST poll Ensue. This is the only reliable coordination path.
+</Callout>
+
+---
+
+## Privacy: AES-256-GCM Encryption
+
+Agent persistent memory stored in Ensue is encrypted with AES-256-GCM. The encryption key is derived from `STORACHA_AGENT_PRIVATE_KEY` via HMAC-SHA256.
+
+Encrypted values are prefixed with `aes256gcm:` followed by base64-encoded ciphertext. The shared library handles encryption and decryption transparently.
+
+Old plaintext entries are auto-migrated on read: the value is parsed as plaintext, then re-encrypted on the next save.

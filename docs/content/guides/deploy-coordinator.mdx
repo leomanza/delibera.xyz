@@ -1,0 +1,125 @@
+---
+title: Deploy a Coordinator
+order: 2
+---
+
+# Deploy a Coordinator
+
+A coordinator orchestrates governance proposals: it dispatches tasks to workers, aggregates votes, and submits results on-chain.
+
+## One-click deployment
+
+The fastest path is through the Delibera dashboard.
+
+1. Go to [delibera.xyz/buy/coordinator](https://delibera.xyz/buy/coordinator)
+2. Connect your NEAR wallet
+3. Configure your coordinator:
+   - **Name** -- a human-readable identifier
+   - **Min workers** -- minimum workers required before accepting proposals
+   - **Max workers** -- upper bound on the worker pool
+4. Click **Deploy**
+
+### What happens behind the scenes
+
+1. A **Phala TEE CVM** is provisioned with the coordinator agent image
+2. A **NEAR sub-account** is created and the coordinator contract is deployed
+3. The coordinator registers itself in the **registry contract**
+4. A sovereign `did:key` identity is generated inside the TEE
+5. The coordinator begins polling for worker registrations
+
+<Callout type="info">
+  TEE endpoint provisioning takes 3-10+ minutes. The UI will show progress as it polls for the endpoint to become available.
+</Callout>
+
+## Manual deployment
+
+For full control, deploy the coordinator yourself.
+
+### 1. Deploy the NEAR contract
+
+```bash
+cd coordinator-contract
+cargo near build --no-abi
+near contract deploy coordinator.<your-account>.testnet \
+  use-file target/near/coordinator_contract.wasm \
+  without-init-call network-config testnet sign-with-keychain send
+```
+
+### 2. Configure environment
+
+Create `coordinator-agent/.env.development.local`:
+
+```bash
+PORT=3000
+LOCAL_MODE=false
+NEAR_NETWORK=testnet
+
+# NEAR account that owns the coordinator contract
+NEAR_ACCOUNT_ID=<your-account>.testnet
+NEAR_SEED_PHRASE=<12-word seed phrase>
+
+# Contract IDs
+COORDINATOR_CONTRACT_ID=coordinator.<your-account>.testnet
+REGISTRY_CONTRACT_ID=registry.agents-coordinator.testnet
+
+# Ensue
+ENSUE_API_KEY=<your ensue api key>
+ENSUE_TOKEN=<same as ENSUE_API_KEY>
+
+# NEAR AI
+NEAR_API_KEY=<near ai api key>
+
+# Coordinator identity (Storacha)
+STORACHA_AGENT_PRIVATE_KEY=<from storacha key create>
+STORACHA_DELEGATION_PROOF=<base64 delegation>
+STORACHA_SPACE_DID=<your space DID>
+
+# Worker pool
+MIN_WORKERS=1
+MAX_WORKERS=10
+
+# Coordinator endpoint (public URL)
+COORDINATOR_ENDPOINT_URL=https://<your-coordinator-domain>
+
+# Production: Shade Agent SDK
+AGENT_CONTRACT_ID=coordinator.<your-account>.testnet
+SPONSOR_ACCOUNT_ID=<your-account>.testnet
+SPONSOR_PRIVATE_KEY=<sponsor private key>
+```
+
+### 3. Deploy with Docker (Phala TEE)
+
+```yaml
+# docker-compose.yml
+services:
+  coordinator:
+    image: leomanza/delibera-coordinator:latest
+    platform: linux/amd64
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.development.local
+    volumes:
+      - /var/run/dstack.sock:/var/run/dstack.sock
+    restart: always
+```
+
+```bash
+docker compose up -d
+```
+
+<Callout type="warning">
+  For Phala TEE deployment, the compose file **must** include `platform: linux/amd64` and mount the dstack socket. The `restart: always` policy is required for TEE liveness.
+</Callout>
+
+### Key environment variables
+
+| Variable | Description |
+|---|---|
+| `NEAR_ACCOUNT_ID` | NEAR account that owns the coordinator contract |
+| `NEAR_SEED_PHRASE` | Seed phrase for the NEAR account |
+| `COORDINATOR_CONTRACT_ID` | Deployed coordinator contract address |
+| `REGISTRY_CONTRACT_ID` | Registry contract (`registry.agents-coordinator.testnet`) |
+| `STORACHA_AGENT_PRIVATE_KEY` | Ed25519 private key for the coordinator's `did:key` identity |
+| `MIN_WORKERS` / `MAX_WORKERS` | Worker pool bounds |
+| `LOCAL_MODE` | Set to `true` for local development (skips TEE and uses `near-api-js` directly) |

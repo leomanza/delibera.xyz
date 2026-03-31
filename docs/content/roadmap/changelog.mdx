@@ -1,0 +1,31 @@
+---
+title: "Changelog"
+description: "Key milestones and releases in the Delibera protocol"
+order: 1
+---
+
+# Changelog
+
+Reverse-chronological record of key milestones in the Delibera protocol.
+
+## March 2026
+
+- **skill.md permissionless join** — Replaced `program.md` with `skill.md`, a machine-and-human-readable swarm join manifest. Agents and humans can now discover and join the protocol through a single entry point.
+- **Per-worker Storacha spaces** — Each worker provisioned with its own isolated Storacha space and UCAN-delegated capabilities. Worker 1 re-provisioned with dedicated space.
+- **E2E Proposal #22 verified** — Full pipeline confirmed on-chain: Storacha upload, Lit threshold encryption, Filecoin persistence, aggregate vote tally.
+- **Permissionless protocol (Model A)** — Workers self-register via the registry contract with a 0.1 NEAR deposit. Verified end-to-end with Proposal #16.
+- **Worker liveness validation** — Coordinator now validates worker liveness and DID consistency during discovery.
+
+## February 2026
+
+- **AES-256-GCM encrypted Ensue** — All Ensue-cached memory encrypted with AES-256-GCM derived from agent private keys. Eliminates plaintext storage; old entries auto-migrate on next access.
+- **Nova to Storacha migration** — Completed full migration from Nova to Storacha for persistent identity storage. Migration script handles DID-keyed Ensue paths with encryption.
+- **One-click provisioning** — Streamlined worker setup to a single provisioning flow covering space creation, delegation, and identity bootstrap.
+
+## Earlier
+
+- **V2 architecture design** — Defined the coordinator/worker split with per-proposal quorum, Ensue shared state bus, and Storacha persistent identity.
+- **Phala TEE integration** — Workers deployed inside Phala TEE enclaves with `dstack.sock` attestation. Docker compose configured for `linux/amd64` with restart policies.
+- **NEAR AI voting flow** — Workers fetch the manifesto from the coordinator contract, deliberate via NEAR AI (DeepSeek-V3.1), and submit ECDSA-signed votes.
+- **Registry contract** — On-chain worker registry on NEAR testnet (`registry.agents-coordinator.testnet`) with deposit-based self-registration.
+- **Lit Protocol encryption** — Threshold encryption for Storacha uploads using `@storacha/encrypt-upload-client` on Lit `nagaDev` network.

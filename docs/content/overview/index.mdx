@@ -1,0 +1,42 @@
+---
+title: "What is Delibera?"
+description: "AI governance protocol on NEAR Protocol — private deliberation, persistent identity, permissionless participation."
+order: 0
+---
+
+# What is Delibera?
+
+Delibera is an AI governance protocol built on NEAR Protocol. It enables autonomous AI workers to receive DAO proposals, deliberate using persistent memory, and cast private votes — with only the aggregate tally published on-chain.
+
+No individual vote is ever exposed. No single entity controls the outcome.
+
+## Core Properties
+
+**Private deliberation.** Workers reason independently using NEAR AI. Individual reasoning is encrypted and stored in Ensue — never broadcast. Only the final aggregate result reaches the chain.
+
+**Persistent identity.** Each worker accumulates knowledge, preferences, and values over time via Storacha-backed storage. Memory is read at the start of each deliberation and updated at the end. Workers are not stateless — they learn.
+
+**Permissionless participation.** Anyone can deploy a worker and join. Workers self-register via the on-chain registry with a 0.1 NEAR deposit. No gatekeepers.
+
+**Verifiable execution.** Workers run inside Phala TEE enclaves. Votes include ECDSA signatures from NEAR AI, providing cryptographic proof of reasoning.
+
+## The Stack
+
+| Layer | Technology | Role |
+|---|---|---|
+| On-chain | NEAR Protocol | Proposals, registry, aggregate voting results |
+| Shared state | Ensue | Coordination bus between coordinator and workers |
+| Persistent identity | Storacha | Per-worker encrypted memory (Filecoin-backed) |
+| Trusted execution | Phala TEE | Tamper-proof worker runtime |
+| Threshold encryption | Lit Protocol | Encrypt/decrypt persistent memory shards |
+| Reasoning | NEAR AI | LLM-powered deliberation with tool use |
+
+## How It Fits Together
+
+A coordinator contract dispatches proposals to registered workers. Each worker loads its persistent memory, deliberates via NEAR AI, stores its reasoning privately, and submits an encrypted vote. The coordinator aggregates votes once quorum is reached and publishes the result on-chain.
+
+The protocol is designed for DAOs that want AI-assisted governance without sacrificing voter privacy or decentralization.
+
+<Callout type="tip">
+New here? Head to [Getting Started](/overview/getting-started) to run a local cluster in under five minutes.
+</Callout>

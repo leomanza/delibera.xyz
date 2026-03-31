@@ -1,0 +1,342 @@
+---
+title: "Coordinator API"
+order: 2
+---
+
+# Coordinator API
+
+The coordinator manages proposals, dispatches tasks to workers, and aggregates results. It runs on port `3000` by default and operates in two modes:
+
+- **LOCAL_MODE** -- Ensue-only coordination loop, no TEE or on-chain agent contract required. Use `POST /api/coordinate/trigger` to start coordinations.
+- **Production** -- Full ShadeAgent integration with TEE attestation and on-chain coordination.
+
+---
+
+<ApiMethod name="Health Check" method="GET" path="/">
+
+Returns coordinator health and operating mode.
+
+**Response:**
+
+```json
+{
+  "message": "Coordinator Agent is running",
+  "status": "healthy",
+  "mode": "local",
+  "contractId": "coordinator.agents-coordinator.testnet",
+  "timestamp": "2026-03-30T12:00:00.000Z"
+}
+```
+
+| Mode | Description |
+|---|---|
+| `local` | LOCAL_MODE enabled, no TEE/contract |
+| `production` | Full ShadeAgent integration |
+| `degraded` | Missing ShadeClient config, health check only |
+
+</ApiMethod>
+
+---
+
+## Proposals
+
+<ApiMethod name="List Proposals" method="GET" path="/api/coordinate/proposals">
+
+List all archived proposals from Ensue. Optionally filter by worker DID.
+
+**Query parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `workerDid` | string | Optional. Filter to proposals where this worker submitted a result. |
+
+**Response:**
+
+```json
+{
+  "proposals": [
+    {
+      "proposalId": "42",
+      "status": "completed",
+      "decision": "Approved",
+      "approved": 3,
+      "rejected": 0,
+      "workerCount": 3,
+      "timestamp": "2026-03-30T12:00:00Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Get Proposal" method="GET" path="/api/coordinate/proposals/:id">
+
+Get full details for a specific proposal, including per-worker results.
+
+**Response:**
+
+```json
+{
+  "proposalId": "42",
+  "status": "completed",
+  "config": {
+    "type": "vote",
+    "parameters": {
+      "proposal": "Should the DAO fund Project X?",
+      "proposalId": "42"
+    }
+  },
+  "tally": {
+    "decision": "Approved",
+    "approved": 3,
+    "rejected": 0,
+    "workerCount": 3,
+    "timestamp": "2026-03-30T12:00:00Z"
+  },
+  "workers": {
+    "did:key:z6Mk...worker1": {
+      "result": {
+        "workerId": "did:key:z6Mk...worker1",
+        "taskType": "vote",
+        "output": { "value": 1, "vote": "Approved", "reasoning": "..." }
+      },
+      "timestamp": "2026-03-30T11:59:50Z"
+    }
+  }
+}
+```
+
+Returns `404` if the proposal is not found.
+
+</ApiMethod>
+
+---
+
+## Task Dispatch
+
+<ApiMethod name="Trigger Coordination" method="POST" path="/api/coordinate/trigger">
+
+Manually trigger a coordination round. Primarily used in LOCAL_MODE for testing.
+
+**Request body:**
+
+```json
+{
+  "taskConfig": {
+    "type": "vote",
+    "parameters": {
+      "proposal": "Should the DAO fund Project X?",
+      "proposalId": "42"
+    },
+    "timeout": 60000
+  }
+}
+```
+
+If `taskConfig` is omitted, defaults to `{ "type": "random", "timeout": 3000 }`.
+
+**Response:**
+
+```json
+{
+  "message": "Coordination triggered",
+  "taskConfig": "{\"type\":\"vote\",\"parameters\":{...}}",
+  "timestamp": "2026-03-30T12:00:00.000Z"
+}
+```
+
+<Callout type="info">
+The coordination runs in the background. Poll `/api/coordinate/status` or `/api/coordinate/proposals` to track progress.
+</Callout>
+
+</ApiMethod>
+
+---
+
+## Workers
+
+<ApiMethod name="List Workers" method="GET" path="/api/coordinate/workers">
+
+List all workers registered to this coordinator, with health status and display names.
+
+Workers are discovered from the on-chain NEAR registry. Each active worker is validated via a liveness probe (HTTP health check + DID consistency). Validation results are cached for 5 minutes.
+
+**Response (registry source):**
+
+```json
+{
+  "workers": [
+    {
+      "did": "did:key:z6MkuLv3ysAUfL2nRRPUVdsxNbZqukfwBUd9eS7dzd1WWqYv",
+      "account_id": "worker1.testnet",
+      "display_name": "Alpha",
+      "endpoint_url": "https://abc123.dstack-prod5.phala.network",
+      "is_active": true,
+      "registered_at": 1711800000000,
+      "ensue_status": "idle"
+    }
+  ],
+  "source": "registry",
+  "timestamp": "2026-03-30T12:00:00.000Z"
+}
+```
+
+Falls back to `WORKERS` environment variable if registry query fails (returns `source: "env_fallback"`).
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Set Worker Name" method="PATCH" path="/api/coordinate/workers/:did/name">
+
+Set or update a worker's display name. Stored in Ensue at `agent/{did}/display_name`.
+
+**Request body:**
+
+```json
+{
+  "name": "Alpha"
+}
+```
+
+**Response:**
+
+```json
+{
+  "did": "did:key:z6Mk...",
+  "name": "Alpha",
+  "status": "updated"
+}
+```
+
+</ApiMethod>
+
+---
+
+## Status and Admin
+
+<ApiMethod name="Coordinator Status" method="GET" path="/api/coordinate/status">
+
+Get the current coordinator status from Ensue (idle, coordinating, etc.).
+
+**Response:**
+
+```json
+{
+  "status": "idle",
+  "proposalId": null,
+  "tally": null,
+  "timestamp": "2026-03-30T12:00:00.000Z"
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Pending Coordinations" method="GET" path="/api/coordinate/pending">
+
+Get pending coordination requests from the on-chain contract. Returns an empty list in LOCAL_MODE.
+
+**Response:**
+
+```json
+{
+  "count": 0,
+  "requests": [],
+  "localMode": true,
+  "timestamp": "2026-03-30T12:00:00.000Z"
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Reset Memory" method="POST" path="/api/coordinate/reset">
+
+Reset all coordinator Ensue memory and set all worker statuses back to `idle`. For testing only.
+
+**Response:**
+
+```json
+{
+  "message": "Memory reset complete",
+  "timestamp": "2026-03-30T12:00:00.000Z"
+}
+```
+
+<Callout type="warning">
+This clears all coordination state in Ensue. Proposal history is not recoverable after reset.
+</Callout>
+
+</ApiMethod>
+
+---
+
+## Jury Selection
+
+<ApiMethod name="Select Jury" method="POST" path="/api/coordinate/select-jury">
+
+Select a random jury from a candidate pool using Flow VRF for verifiable randomness.
+
+**Request body:**
+
+```json
+{
+  "pool": ["alice.testnet", "bob.testnet", "carol.testnet", "dave.testnet"],
+  "jurySize": 3,
+  "deliberationId": "proposal-42"
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `pool` | string[] | Yes | Candidate NEAR account IDs |
+| `jurySize` | number | No | Number of jurors to select (default: 3) |
+| `deliberationId` | string | No | Optional context ID for the selection |
+
+**Response:**
+
+```json
+{
+  "jury": ["bob.testnet", "alice.testnet", "dave.testnet"],
+  "vrfSeed": "0xabc123...",
+  "timestamp": "2026-03-30T12:00:00.000Z"
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="Verify Jury" method="POST" path="/api/coordinate/verify-jury">
+
+Verify that a jury selection is deterministic given the same VRF seed.
+
+**Request body:**
+
+```json
+{
+  "pool": ["alice.testnet", "bob.testnet", "carol.testnet", "dave.testnet"],
+  "jurySize": 3,
+  "vrfSeed": "0xabc123..."
+}
+```
+
+**Response:**
+
+```json
+{
+  "jury": ["bob.testnet", "alice.testnet", "dave.testnet"],
+  "vrfSeed": "0xabc123...",
+  "verified": true,
+  "timestamp": "2026-03-30T12:00:00.000Z"
+}
+```
+
+</ApiMethod>

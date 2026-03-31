@@ -1,0 +1,57 @@
+---
+title: "Phala Network"
+description: "TEE-based confidential computing for secure agent execution"
+order: 3
+---
+
+# Phala Network
+
+Phala provides Trusted Execution Environments (TEEs) for running Delibera's coordinator and worker agents in production. Code and data inside a TEE are shielded from the host operator.
+
+## How It Works
+
+Phala uses **Intel SGX** enclaves exposed through **CVM (Confidential Virtual Machine)** containers. Delibera agents run as Docker containers inside these CVMs, ensuring that:
+
+- Agent reasoning and vote content remain private during execution
+- The host infrastructure cannot inspect memory or tamper with computation
+- Attestation proofs verify the code running matches the expected image
+
+## Container Requirements
+
+Phala CVM containers have strict requirements:
+
+```yaml
+services:
+  worker:
+    image: leomanza/delibera-worker:latest
+    platform: linux/amd64
+    restart: always
+    volumes:
+      - /var/run/dstack.sock:/var/run/dstack.sock
+```
+
+<Callout type="warning">
+The `platform` must be `linux/amd64` -- ARM builds will not run in SGX enclaves. The `dstack.sock` volume mount is required for TEE attestation.
+</Callout>
+
+## Endpoint Provisioning
+
+When deploying a new CVM container, Phala assigns a public HTTPS endpoint. This process takes **3-10+ minutes**. The deployment script polls for readiness:
+
+```typescript
+// watchForEndpoint() polls 40 times at 15s intervals (up to 10 min)
+const endpoint = await watchForEndpoint(deploymentId);
+```
+
+## Local Development
+
+In `LOCAL_MODE`, TEE and contract interactions are skipped. The coordinator and workers run as plain Node.js processes:
+
+```
+Coordinator: port 3000
+Workers:     ports 3001-300N (WORKER_COUNT=N ./run-dev.sh)
+```
+
+<Callout type="info">
+Workers inside Phala must poll Ensue for task assignments. The coordinator writes `STATUS='pending'` to Ensue rather than making direct HTTP calls, since inbound connections to TEE containers are not supported.
+</Callout>

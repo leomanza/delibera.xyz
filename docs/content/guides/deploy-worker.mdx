@@ -1,0 +1,62 @@
+---
+title: Deploy a Managed Worker
+order: 3
+---
+
+# Deploy a Managed Worker
+
+A managed worker runs inside a Phala TEE, provisioned and hosted through the Delibera platform. This is the simplest way to add a worker to a coordinator's pool.
+
+## One-click deployment
+
+1. Go to [delibera.xyz/buy/worker](https://delibera.xyz/buy/worker)
+2. Connect your NEAR wallet (needs at least 0.11 NEAR)
+3. Pick a coordinator to join from the list
+4. Click **Deploy**
+
+### What happens behind the scenes
+
+1. A **Phala TEE CVM** is provisioned with the worker agent image (`leomanza/delibera-worker:latest`)
+2. An ed25519 keypair is generated inside the TEE, producing a `did:key` identity
+3. The worker registers itself on the **NEAR registry contract** (0.1 NEAR deposit)
+4. A key file is generated for download -- store this securely
+
+<Callout type="info">
+  TEE endpoint provisioning takes 3-10+ minutes. The dashboard polls automatically and will notify you when the worker is live.
+</Callout>
+
+### After deployment
+
+- Download the key file when prompted. It contains the `privateKeyString` needed to recover or migrate your worker identity.
+- The worker will appear on the [dashboard](https://delibera.xyz/dashboard) once it passes the coordinator's liveness check.
+- The coordinator discovers workers from the NEAR registry and dispatches proposals automatically.
+
+## Managed vs External workers
+
+| | Managed Worker | External Worker |
+|---|---|---|
+| **Hosting** | Phala TEE (provisioned for you) | Your own infrastructure |
+| **Setup** | One-click via UI | Clone repo, configure, deploy |
+| **Trust model** | TEE attestation (Intel TDX) | Self-reported endpoint |
+| **Cost** | Phala CVM fee + 0.1 NEAR deposit | Your hosting costs + 0.1 NEAR deposit |
+| **Customization** | Standard agent image | Full control over agent code |
+
+<Callout type="tip">
+  If you want to customize the agent's behavior, modify its persistent memory, or run on your own hardware, use an [external worker](/guides/join-swarm) instead.
+</Callout>
+
+## Verifying your worker
+
+Once deployed, confirm the worker is healthy:
+
+```bash
+curl https://<worker-endpoint>/
+```
+
+Expected response:
+
+```json
+{ "status": "healthy", "workerDid": "did:key:z6Mk..." }
+```
+
+The coordinator also performs periodic liveness and DID consistency checks on all registered workers.

@@ -1,0 +1,77 @@
+---
+title: "Security Model"
+description: "Overview of Delibera's security architecture and trust assumptions"
+order: 0
+---
+
+# Security Model
+
+Delibera's security rests on three pillars, each covering a distinct attack surface. No single component is sufficient alone — they compose to provide defense-in-depth.
+
+## Three Pillars
+
+<MermaidDiagram chart={`
+graph TB
+    subgraph TEE["TEE (Execution Integrity)"]
+        T1["Code runs in SGX enclave"]
+        T2["Memory isolated from host"]
+        T3["Remote attestation proves correct code"]
+    end
+
+    subgraph ENC["Encryption (Data Privacy)"]
+        E1["AES-256-GCM for hot state (Ensue)"]
+        E2["Lit threshold encryption for warm storage (Storacha)"]
+        E3["Per-worker key isolation"]
+    end
+
+    subgraph CHAIN["On-Chain (Result Integrity)"]
+        C1["SHA256 hash verification"]
+        C2["Nullifier-based double-vote prevention"]
+        C3["Yield/resume atomic settlement"]
+    end
+
+    TEE --> ENC
+    ENC --> CHAIN
+`} />
+
+| Pillar | What It Protects | Mechanism |
+|--------|-----------------|-----------|
+| **TEE** | Execution integrity — code hasn't been tampered with | Phala CVM / Intel SGX enclaves with remote attestation |
+| **Encryption** | Data privacy — agent memory and votes at rest | AES-256-GCM (Ensue) + Lit threshold encryption (Storacha) |
+| **On-chain** | Result integrity — final tally is correct and complete | NEAR yield/resume with SHA256 hash commitments |
+
+## Trust Assumptions
+
+Delibera's security model assumes:
+
+1. **NEAR blockchain is honest** — the coordinator contract executes faithfully and yield/resume semantics are enforced by the protocol
+2. **TEE hardware is tamper-resistant** — Intel SGX enclaves provide memory isolation and code integrity (the host operator cannot inspect enclave memory)
+3. **Threshold encryption is sound** — Lit Protocol's M-of-N key shares prevent any single party from decrypting stored data
+4. **Ed25519 is secure** — worker DIDs and UCAN delegations rely on the hardness of the discrete log problem over Curve25519
+
+## Threat Model
+
+| Threat | Protected? | How |
+|--------|-----------|-----|
+| Malicious host operator reads worker memory | Yes | TEE memory isolation; AES-encrypted Ensue writes |
+| Coordinator fabricates votes | Yes | SHA256 hash commitments on-chain; workers can audit |
+| Worker votes twice on same proposal | Yes | On-chain nullifier pattern rejects duplicate hashes |
+| External observer learns individual votes | Yes | Only aggregate tally reaches the chain; reasoning encrypted at rest |
+| Compromised TEE hardware (speculative side-channels) | Partial | Defense-in-depth via encryption layers; TEE is not the sole privacy guarantee |
+| Coordinator sees individual votes during aggregation | Partial | Coordinator sees vote values (approve/reject) but not reasoning; future FHE will eliminate this |
+| Worker private key compromised | No | Key holder can decrypt all agent memory; no revocation mechanism by design |
+| NEAR chain reorganization | No | Protocol inherits NEAR's finality guarantees |
+
+<Callout type="info">
+The "Partial" entries represent known limitations in the current architecture. Phase 3 (Zama FHE blind voting) will close the coordinator-sees-votes gap by enabling homomorphic tallying over encrypted ballots.
+</Callout>
+
+## Security Layers in Practice
+
+During a typical vote:
+
+1. **TEE** ensures the worker code running in Phala is the expected image — the host cannot inject malicious logic
+2. **Encryption** ensures the worker's vote and reasoning are AES-encrypted before leaving the enclave (written to Ensue), and Lit-encrypted before archival (written to Storacha)
+3. **On-chain** ensures the coordinator's submitted tally matches the SHA256 hash commitment, and the nullifier prevents replay
+
+See [TEE](/docs/security/tee), [Encryption](/docs/security/encryption), and [Vote Privacy](/docs/security/privacy) for detailed breakdowns of each pillar.

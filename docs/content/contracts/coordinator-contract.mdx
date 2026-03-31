@@ -1,0 +1,449 @@
+---
+title: "Coordinator Contract"
+order: 2
+---
+
+# Coordinator Contract
+
+**Account:** `coordinator.agents-coordinator.testnet`
+
+The Coordinator contract manages proposal lifecycle, worker submission recording, and on-chain result settlement using NEAR's yield/resume pattern. Individual votes remain private off-chain -- only aggregate tallies are settled on-chain.
+
+## Proposal Lifecycle
+
+```
+Created ──> WorkersCompleted ──> Finalized
+   │
+   └──────> TimedOut
+```
+
+| State | Description |
+|---|---|
+| `Created` | Yield promise created, waiting for worker submissions |
+| `WorkersCompleted` | All expected worker submissions recorded on-chain |
+| `Finalized` | Aggregated result settled on-chain via yield resume |
+| `TimedOut` | Yield timed out (~200 blocks / ~100s on testnet) before resolution |
+
+## Yield/Resume Pattern
+
+The contract uses NEAR's `promise_yield_create` to create an async coordination point:
+
+1. `start_coordination` creates a yielded promise and stores the `yield_id` in the proposal
+2. The coordinator agent orchestrates off-chain deliberation (workers vote via Ensue)
+3. `record_worker_submissions` records nullifier hashes on-chain (no vote data)
+4. `coordinator_resume` calls `promise_yield_resume` with the aggregated result
+5. The `return_coordination_result` callback finalizes the proposal state
+
+If the yield times out before resume, the proposal transitions to `TimedOut` and the contract panics with a timeout error.
+
+## Data Structures
+
+### Proposal
+
+```rust
+pub struct Proposal {
+    pub yield_id: CryptoHash,
+    pub task_config: String,
+    pub config_hash: String,
+    pub timestamp: u64,
+    pub requester: AccountId,
+    pub state: ProposalState,
+    pub expected_worker_count: u8,
+    pub quorum: u8,
+    pub worker_submissions: Vec<WorkerSubmission>,
+    pub finalized_result: Option<String>,
+}
+```
+
+### WorkerSubmission
+
+```rust
+pub struct WorkerSubmission {
+    pub worker_id: String,
+    pub result_hash: String,   // nullifier -- no vote data on-chain
+    pub timestamp: u64,
+}
+```
+
+### Manifesto
+
+```rust
+pub struct Manifesto {
+    pub text: String,          // up to 10,000 characters
+    pub hash: String,          // SHA-256 hex
+}
+```
+
+---
+
+## Call Methods
+
+<ApiMethod name="start_coordination" method="CALL" path="coordinator.agents-coordinator.testnet">
+
+Start a new proposal. Creates a yielded promise and returns the proposal ID. Requires a manifesto to be set first.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `task_config` | `String` | JSON task configuration (max 10,000 chars) |
+| `expected_worker_count` | `u8` | Number of workers expected to participate |
+| `quorum` | `u8` | Minimum votes needed for valid result |
+
+**Returns:** `u64` (proposal ID)
+
+```bash
+near call coordinator.agents-coordinator.testnet start_coordination \
+  '{"task_config":"{\"type\":\"vote\",\"parameters\":{\"proposal\":\"Fund dev education\"}}","expected_worker_count":3,"quorum":2}' \
+  --accountId agents-coordinator.testnet \
+  --gas 300000000000000
+```
+
+<Callout type="warning">
+The yield times out after ~200 blocks (~100 seconds on testnet). The coordinator agent must complete the full flow (worker polling, submission recording, and resume) within this window.
+</Callout>
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="record_worker_submissions" method="CALL" path="coordinator.agents-coordinator.testnet">
+
+Record worker participation on-chain using the nullifier pattern. Each worker can submit only once per proposal (double-submission panics). The submission count must exactly match `expected_worker_count`.
+
+Only callable by a registered coordinator with an approved codehash.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `proposal_id` | `u64` | Proposal to record submissions for |
+| `submissions` | `Vec<WorkerSubmissionInput>` | Array of `{ worker_id, result_hash }` |
+
+```json
+{
+  "proposal_id": 1,
+  "submissions": [
+    { "worker_id": "did:key:z6Mk...", "result_hash": "a1b2c3..." },
+    { "worker_id": "did:key:z6Mk...", "result_hash": "d4e5f6..." }
+  ]
+}
+```
+
+Transitions proposal state from `Created` to `WorkersCompleted`.
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="coordinator_resume" method="CALL" path="coordinator.agents-coordinator.testnet">
+
+Resume the yielded promise with the aggregated result. Only callable by a registered coordinator with an approved codehash. The proposal must be in `WorkersCompleted` state.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `proposal_id` | `u64` | Proposal to resume |
+| `aggregated_result` | `String` | JSON result (e.g., `{"approved":2,"rejected":1,"decision":"Approved"}`) |
+| `config_hash` | `String` | SHA-256 of original task config (integrity check) |
+| `result_hash` | `String` | SHA-256 of `aggregated_result` (integrity check) |
+
+<Callout type="info">
+The contract verifies both hashes: `config_hash` must match the stored config hash, and `result_hash` must match the SHA-256 of the provided `aggregated_result`. This prevents tampering between submission recording and result settlement.
+</Callout>
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="set_manifesto" method="CALL" path="coordinator.agents-coordinator.testnet">
+
+Set the DAO manifesto that guides agent voting decisions. Owner only. Max 10,000 characters. The manifesto text and its SHA-256 hash are stored on-chain.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `manifesto_text` | `String` | Manifesto content (max 10,000 chars) |
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="approve_codehash" method="CALL" path="coordinator.agents-coordinator.testnet">
+
+Approve a TEE codehash for coordinator registration. Owner only. Coordinators must have an approved codehash to call `record_worker_submissions` and `coordinator_resume`.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `codehash` | `String` | TEE codehash to approve |
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="register_coordinator" method="CALL" path="coordinator.agents-coordinator.testnet">
+
+Register a coordinator agent with a TEE checksum and codehash. Owner only. The codehash must be pre-approved via `approve_codehash`.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `checksum` | `String` | TEE deployment checksum |
+| `codehash` | `String` | Pre-approved TEE codehash |
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="register_worker" method="CALL" path="coordinator.agents-coordinator.testnet">
+
+Register a worker on the Coordinator contract. Only callable by the owner or a registered coordinator.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `worker_id` | `String` | Worker identifier (typically a DID) |
+| `account_id` | `Option<AccountId>` | Optional NEAR account ID |
+
+<Callout type="info">
+This is a separate registration from the Registry contract. The Registry handles permissionless discovery; this method registers workers directly on the Coordinator for on-chain validation.
+</Callout>
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="deactivate_worker" method="CALL" path="coordinator.agents-coordinator.testnet">
+
+Deactivate a worker on the Coordinator contract. Owner only. The worker record is preserved but marked inactive.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `worker_id` | `String` | Worker ID to deactivate |
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="clear_proposal" method="CALL" path="coordinator.agents-coordinator.testnet">
+
+Remove a proposal from storage. Owner only. Used for cleanup of stale or test proposals.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `proposal_id` | `u64` | Proposal to remove |
+
+</ApiMethod>
+
+---
+
+## View Methods
+
+<ApiMethod name="get_proposal" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Get a single proposal by ID.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `proposal_id` | `u64` | Proposal ID |
+
+**Returns:** `Option<Proposal>`
+
+```bash
+near view coordinator.agents-coordinator.testnet get_proposal '{"proposal_id":1}'
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_all_proposals" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Get all proposals with optional pagination.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `from_index` | `Option<u64>` | Start from this proposal ID (default: 0) |
+| `limit` | `Option<u64>` | Max results to return |
+
+**Returns:** `Vec<(u64, Proposal)>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_proposals_by_state" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Filter proposals by lifecycle state.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `state` | `ProposalState` | `"Created"`, `"WorkersCompleted"`, `"Finalized"`, or `"TimedOut"` |
+| `from_index` | `Option<u64>` | Start index |
+| `limit` | `Option<u64>` | Max results |
+
+**Returns:** `Vec<(u64, Proposal)>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_pending_coordinations" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Shortcut for `get_proposals_by_state("Created", ...)`. Returns proposals awaiting worker submissions.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `from_index` | `Option<u64>` | Start index |
+| `limit` | `Option<u64>` | Max results |
+
+**Returns:** `Vec<(u64, Proposal)>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_finalized_coordination" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Get the finalized result string for a specific proposal. Returns `None` if the proposal is not finalized.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `proposal_id` | `u64` | Proposal ID |
+
+**Returns:** `Option<String>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_all_finalized_coordinations" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Get all finalized proposal results with pagination.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `from_index` | `Option<u64>` | Start index |
+| `limit` | `Option<u64>` | Max results |
+
+**Returns:** `Vec<(u64, String)>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_worker_submissions" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Get all worker submissions (nullifier hashes) for a proposal.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `proposal_id` | `u64` | Proposal ID |
+
+**Returns:** `Vec<WorkerSubmission>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_manifesto" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Get the current DAO manifesto.
+
+**Returns:** `Option<Manifesto>`
+
+```bash
+near view coordinator.agents-coordinator.testnet get_manifesto '{}'
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_registered_workers" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+List all registered workers (active and inactive).
+
+**Returns:** `Vec<RegisteredWorker>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_active_workers" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+List only active registered workers.
+
+**Returns:** `Vec<RegisteredWorker>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="is_worker_registered" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Check if a worker is registered and active.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `worker_id` | `String` | Worker ID to check |
+
+**Returns:** `bool`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_worker_count" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Get the count of active registered workers.
+
+**Returns:** `u32`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_current_proposal_id" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Get the latest proposal ID (auto-incrementing counter).
+
+**Returns:** `u64`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_owner" method="VIEW" path="coordinator.agents-coordinator.testnet">
+
+Get the contract owner account.
+
+**Returns:** `AccountId`
+
+</ApiMethod>

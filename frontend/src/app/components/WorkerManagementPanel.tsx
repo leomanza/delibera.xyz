@@ -13,6 +13,14 @@ interface Props {
   onWorkerChanged?: () => void;
 }
 
+function truncateDid(id: string): string {
+  if (id.startsWith("did:key:")) {
+    const key = id.slice("did:key:".length);
+    return `${key.slice(0, 8)}…${key.slice(-4)}`;
+  }
+  return id;
+}
+
 export default function WorkerManagementPanel({ onWorkerChanged }: Props) {
   const fetcher = useCallback(async () => {
     const data = await getRegisteredWorkers();
@@ -29,6 +37,7 @@ export default function WorkerManagementPanel({ onWorkerChanged }: Props) {
   const [removing, setRemoving] = useState<string | null>(null);
 
   const workers = data?.workers ?? [];
+  console.log("Registered workers:", workers);
 
   async function handleRegister() {
     if (!newWorkerId.trim() || submitting) return;
@@ -67,16 +76,18 @@ export default function WorkerManagementPanel({ onWorkerChanged }: Props) {
               key={w.worker_id}
               className="flex items-center justify-between p-2 rounded-lg bg-zinc-800/60 text-xs"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 min-w-0">
                 <span
-                  className={`h-2 w-2 rounded-full ${w.active ? "bg-green-500" : "bg-zinc-600"}`}
+                  className={`h-2 w-2 rounded-full shrink-0 ${w.active ? "bg-green-500" : "bg-zinc-600"}`}
                 />
-                <span className="font-mono text-zinc-300">{w.worker_id}</span>
-                {w.account_id && (
-                  <span className="text-zinc-600 font-mono text-[10px] truncate max-w-[120px]">
-                    {w.account_id}
-                  </span>
-                )}
+                <div className="min-w-0">
+                  <span className="font-mono text-zinc-300">{w.display_name || w.account_id || truncateDid(w.worker_id)}</span>
+                  {(w.display_name || w.account_id) && (
+                    <p className="font-mono text-zinc-600 text-[10px] truncate max-w-[160px]">
+                      {w.display_name ? (w.account_id || truncateDid(w.worker_id)) : truncateDid(w.worker_id)}
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 onClick={() => handleRemove(w.worker_id)}

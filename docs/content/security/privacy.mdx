@@ -1,0 +1,107 @@
+---
+title: "Vote Privacy"
+description: "How Delibera ensures individual vote privacy while maintaining verifiability"
+order: 3
+---
+
+# Vote Privacy
+
+Delibera's core privacy guarantee: **individual votes and reasoning never appear on-chain**. The blockchain records only the aggregate tally — "3 approved, 1 rejected" — with no link to which worker voted which way.
+
+## What Each Party Can See
+
+| Party | Sees Individual Votes? | Sees Reasoning? | Sees Aggregate Tally? |
+|-------|----------------------|-----------------|----------------------|
+| **The worker itself** | Its own only | Its own only (AES-encrypted in Ensue) | No |
+| **Coordinator (during aggregation)** | Yes (approve/reject values) | No (encrypted in worker's Ensue namespace) | Yes (it computes it) |
+| **NEAR blockchain** | No | No | Yes (finalized result) |
+| **External observer** | No | No | Yes (public on-chain) |
+| **Phala host operator** | No (TEE memory isolation) | No (TEE + encryption) | No (until on-chain) |
+
+<Callout type="info">
+The coordinator sees individual vote values (approve/reject) during tallying, but it **cannot** see the reasoning behind each vote. Reasoning is AES-encrypted in each worker's private Ensue namespace — only the worker holding the private key can decrypt it.
+</Callout>
+
+## Privacy Mechanisms
+
+### 1. Isolated Ensue Namespaces
+
+Each worker writes to DID-prefixed keys in Ensue. Worker A cannot read Worker B's keys. All values are AES-256-GCM encrypted with a key derived from the worker's private key — even if Ensue's storage were compromised, the data is ciphertext.
+
+### 2. Aggregate-Only On-Chain Settlement
+
+The coordinator's `resume_coordination` call submits only:
+
+```json
+{
+  "approved": 3,
+  "rejected": 1,
+  "decision": "approved",
+  "workerCount": 4
+}
+```
+
+No per-worker breakdown. No vote-to-DID mapping. No reasoning text.
+
+### 3. Nullifier-Based Double-Vote Prevention
+
+The contract uses SHA256 nullifier hashes to prevent workers from voting twice on the same proposal. The hash commits to the worker's participation without revealing their vote:
+
+```
+nullifier = SHA256(worker_did + proposal_id)
+```
+
+The contract stores only the hash set. Given a nullifier, you can verify that a specific worker voted on a specific proposal — but you cannot determine how they voted.
+
+### 4. TEE Execution Isolation
+
+In production, workers run inside Phala SGX enclaves. The host operator cannot inspect memory, attach a debugger, or intercept function calls. This prevents vote extraction at the execution layer.
+
+## Privacy Flow
+
+<MermaidDiagram chart={`
+sequenceDiagram
+    participant W as Worker (SGX Enclave)
+    participant E as Ensue (Encrypted)
+    participant C as Coordinator
+    participant N as NEAR Contract
+
+    W->>W: Call NEAR AI, get {vote, reasoning}
+    W->>E: Write AES-encrypted vote + reasoning
+    Note over E: Only this worker can decrypt
+
+    C->>E: Read worker vote value (approve/reject)
+    Note over C: Cannot read reasoning (different AES key)
+    C->>C: Tally: 3 approved, 1 rejected
+    C->>N: resume_coordination({approved: 3, rejected: 1})
+    Note over N: Individual votes never reach chain
+`} />
+
+## Current Limitations
+
+The coordinator is a trusted party during aggregation. It sees individual vote values (though not reasoning) in order to compute the tally. This means:
+
+- A compromised coordinator could log which worker voted approve/reject
+- The coordinator cannot fabricate votes (SHA256 hash verification prevents this)
+- The coordinator cannot see why a worker voted a particular way
+
+<Callout type="warning">
+This is the primary remaining privacy gap. The coordinator knows "Worker A voted approve" even though it cannot prove this to anyone else and cannot see Worker A's reasoning.
+</Callout>
+
+## Future: Zama FHE Blind Voting
+
+Phase 3 of the roadmap introduces Fully Homomorphic Encryption (FHE) via Zama's fhEVM. With FHE:
+
+- Workers encrypt their votes under the FHE public key before submission
+- The coordinator performs **homomorphic addition** over the encrypted ballots — it computes the tally without ever decrypting individual votes
+- The final tally is decrypted collectively (threshold decryption) and submitted on-chain
+
+This eliminates the coordinator-sees-votes gap entirely. The coordinator processes only ciphertext and learns nothing beyond the aggregate result.
+
+| Property | Current | With FHE |
+|----------|---------|----------|
+| Coordinator sees individual votes | Yes (approve/reject only) | No |
+| Coordinator sees reasoning | No | No |
+| On-chain reveals individual votes | No | No |
+| Tally correctness verifiable | Yes (hash commitments) | Yes (FHE proof) |

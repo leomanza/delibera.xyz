@@ -1,0 +1,80 @@
+---
+title: Identity System
+order: 0
+---
+
+# Identity System
+
+Every Delibera worker agent has a unique, sovereign identity rooted in a single Ed25519 keypair. This identity is not assigned by the coordinator — it is generated during provisioning and belongs to the worker alone.
+
+## DID:key Model
+
+Worker identity follows the [DID:key](https://w3c-ccg.github.io/did-method-key/) specification. The Ed25519 public key is encoded as a `did:key` identifier using the Multicodec `ed25519-pub` prefix:
+
+```
+did:key:z6MkuLv3ysAUfL2nRRPUVdsxNbZqukfwBUd9eS7dzd1WWqYv
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        Base58-encoded Ed25519 public key with multicodec prefix
+```
+
+The `z6Mk` prefix is characteristic of Ed25519 keys in the did:key method.
+
+## One Key, Three Roles
+
+A single environment variable — `STORACHA_AGENT_PRIVATE_KEY` — drives everything:
+
+| Derivation | Purpose | How |
+|---|---|---|
+| **DID** | Worker identity across the protocol | Ed25519 public key encoded as `did:key` |
+| **AES-256-GCM key** | Encrypt memory stored in Ensue | `HMAC-SHA256(privateKey, "delibera-ensue-cache-v1")` |
+| **Storacha agent** | Authenticate uploads and delegations | Ed25519 keypair used as UCAN issuer |
+
+<Callout type="info">
+The private key is a base64-encoded Ed25519 seed. It never leaves the worker process. All derived keys are computed in-memory using Node.js built-in `crypto.subtle` — no external KMS required.
+</Callout>
+
+## Provisioning
+
+Identity is generated during worker provisioning, either through the UI or the provisioning API:
+
+1. A new Ed25519 keypair is created (via `storacha key create` or programmatically)
+2. The coordinator delegates Storacha space capabilities to the new DID via UCAN
+3. The worker receives `STORACHA_AGENT_PRIVATE_KEY` and `STORACHA_DELEGATION_PROOF`
+4. On first boot, the worker derives its DID and AES key, then begins accumulating memory
+
+<MermaidDiagram chart={`
+sequenceDiagram
+    participant UI as Provisioning UI
+    participant API as Protocol API
+    participant Coord as Coordinator Space
+    participant Worker as New Worker
+
+    UI->>API: Request new worker
+    API->>API: Generate Ed25519 keypair
+    API->>Coord: Create UCAN delegation for new DID
+    Coord-->>API: Delegation proof (CAR, base64)
+    API-->>Worker: STORACHA_AGENT_PRIVATE_KEY + STORACHA_DELEGATION_PROOF
+    Worker->>Worker: Derive DID, AES key, Storacha identity
+    Worker->>Worker: Begin accumulating memory
+`} />
+
+## Sovereignty
+
+Each worker's identity is self-contained:
+
+- **No central authority** can revoke or modify the DID — it is derived from the keypair
+- **Storage is isolated** — each worker has its own Storacha space and DID-prefixed Ensue keys
+- **Memory is encrypted** — only the worker holding the private key can decrypt its own data
+- **Portable** — move a worker to a new host by transferring the key material
+
+<Callout type="warning">
+If a worker's private key is lost, its accumulated knowledge, preferences, and decision history become permanently inaccessible. There is no recovery mechanism by design — this is the tradeoff for true sovereignty.
+</Callout>
+
+## Key Files
+
+| File | Role |
+|---|---|
+| `worker-agent/src/storacha/identity.ts` | DID derivation, Storacha client creation |
+| `worker-agent/src/storacha/local-crypto.ts` | AES key derivation from private key |
+| `protocol-api/src/routes/provision.ts` | Provisioning endpoint (key generation, delegation) |

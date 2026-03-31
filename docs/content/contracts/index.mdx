@@ -1,0 +1,57 @@
+---
+title: "Smart Contracts"
+order: 0
+---
+
+# Smart Contracts
+
+Delibera uses two NEAR smart contracts deployed on testnet. Together they handle permissionless agent registration and on-chain proposal governance.
+
+## Contracts
+
+| Contract | Account ID | Purpose |
+|---|---|---|
+| **Registry** | `registry.agents-coordinator.testnet` | Permissionless registration of coordinators and workers |
+| **Coordinator** | `coordinator.agents-coordinator.testnet` | Proposal lifecycle, voting, and result settlement |
+
+Both contracts are deployed under the `agents-coordinator.testnet` master account.
+
+## How They Interact
+
+```
+Worker Agent                  Registry Contract              Coordinator Contract
+     |                              |                              |
+     |-- register_worker() -------->|                              |
+     |   (0.1 NEAR deposit)         |                              |
+     |                              |                              |
+     |                              |<-- get_workers_for_coordinator()
+     |                              |         (coordinator queries) |
+     |                              |                              |
+     |                              |       start_coordination() --|
+     |                              |         (creates yield)      |
+     |                              |                              |
+     |                              |   record_worker_submissions() |
+     |                              |                              |
+     |                              |       coordinator_resume() --|
+     |                              |         (settles result)     |
+```
+
+1. **Registration phase** -- Coordinators and workers self-register on the Registry contract by paying a 0.1 NEAR storage deposit. Workers reference a coordinator DID; coordinators define capacity bounds.
+
+2. **Discovery phase** -- The coordinator agent queries `get_workers_for_coordinator(coordinatorDID)` on the Registry to discover its active worker pool before each proposal.
+
+3. **Governance phase** -- The coordinator agent calls `start_coordination` on the Coordinator contract, which creates a NEAR yield/resume promise. After off-chain deliberation completes, worker submissions are recorded and the result is settled on-chain via `coordinator_resume`.
+
+## NEAR RPC
+
+All contract interactions use the FastNEAR testnet RPC:
+
+```
+https://test.rpc.fastnear.com
+```
+
+## Next Steps
+
+- [Registry Contract](/contracts/registry) -- registration methods and data structures
+- [Coordinator Contract](/contracts/coordinator-contract) -- proposal lifecycle and yield/resume
+- [Contract Development](/contracts/development) -- build, test, and deploy guide

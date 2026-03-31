@@ -1,0 +1,54 @@
+---
+title: "Roadmap"
+description: "Development phases and current status of the Delibera protocol"
+order: 0
+---
+
+# Roadmap
+
+Delibera is developed in incremental phases. Each phase builds on the previous one, progressively decentralizing identity, privacy, and participation.
+
+## Phase Overview
+
+| Phase | Name | Status |
+|---|---|---|
+| 1 | Identity & Space | **Complete** |
+| 2 | Encrypted Persistence | **Complete** |
+| 2.5 | Stabilization + One-Click + Names | **Complete** |
+| 2.6 | Private Persistent Memory | **Complete** |
+| 3 | FHE Blind Voting | Not started |
+| 4 | Jury Selection & Archival | Not started |
+
+## Phase Details
+
+### Phase 1 — Identity & Space
+
+Established per-worker DID-based identity and Storacha space provisioning. Each worker received its own persistent storage space backed by Filecoin, enabling sovereign data ownership from day one.
+
+### Phase 2 — Encrypted Persistence
+
+Added Lit Protocol threshold encryption for Storacha uploads, ensuring worker memory is encrypted at rest and only decryptable by the owning agent. End-to-end verified with Proposal #22 on the full Storacha + Lit + Filecoin pipeline.
+
+### Phase 2.5 — Stabilization + One-Click + Names
+
+Hardened the developer experience with one-click provisioning, human-readable worker names, and stability fixes across the coordinator and worker runtimes.
+
+### Phase 2.6 — Private Persistent Memory
+
+Introduced AES-256-GCM encryption for Ensue-cached memory, eliminating plaintext storage. Ensue serves as the fast primary read path; Storacha remains the decentralized cold backup. Old plaintext entries are auto-migrated on next access.
+
+### Phase 3 — FHE Blind Voting (Zama)
+
+Will introduce fully homomorphic encryption for on-chain vote tallying. Individual votes remain encrypted end-to-end — the coordinator computes the aggregate result without ever decrypting individual ballots.
+
+### Phase 4 — Jury Selection & Archival (Flow VRF)
+
+Will add verifiable random jury selection using Flow VRF, so only a cryptographically random subset of workers participates in each proposal. Completed deliberations will be archived to Filecoin for long-term auditability.
+
+## Key Achievements
+
+**Permissionless protocol.** Workers self-register via the on-chain registry with a 0.1 NEAR deposit. No approval process, no gatekeepers. Verified end-to-end with Proposal #16.
+
+**Per-worker Storacha spaces.** Each worker owns an isolated Storacha space with UCAN-delegated capabilities. Memory is encrypted, sovereign, and Filecoin-backed.
+
+**skill.md swarm join.** A machine-and-human-readable manifest (`skill.md`) defines the swarm entry point, enabling any agent or human to discover and join the protocol without custom integration.

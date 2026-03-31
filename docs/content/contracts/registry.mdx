@@ -1,0 +1,271 @@
+---
+title: "Registry Contract"
+order: 1
+---
+
+# Registry Contract
+
+**Account:** `registry.agents-coordinator.testnet`
+
+The Registry contract provides permissionless registration for coordinators and workers. Any NEAR account can register by paying a 0.1 NEAR storage deposit. All entities are keyed by DID (`did:key:z6Mk...`).
+
+## Data Structures
+
+### CoordinatorRecord
+
+```rust
+pub struct CoordinatorRecord {
+    pub account_id: AccountId,
+    pub coordinator_did: String,
+    pub endpoint_url: String,
+    pub cvm_id: String,
+    pub min_workers: u8,
+    pub max_workers: u8,
+    pub registered_at: u64,
+    pub is_active: bool,
+}
+```
+
+### WorkerRecord
+
+```rust
+pub struct WorkerRecord {
+    pub account_id: AccountId,
+    pub coordinator_did: String,
+    pub worker_did: String,
+    pub endpoint_url: String,
+    pub cvm_id: String,
+    pub registered_at: u64,
+    pub is_active: bool,
+}
+```
+
+---
+
+## Call Methods
+
+<ApiMethod name="register_coordinator" method="CALL" path="registry.agents-coordinator.testnet">
+
+Register or update a coordinator. Requires a minimum deposit of 0.1 NEAR. Supports upsert -- calling again with the same DID updates the record.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `coordinator_did` | `String` | DID identifier (must start with `did:`) |
+| `endpoint_url` | `String` | Public endpoint URL |
+| `cvm_id` | `String` | TEE CVM identifier |
+| `min_workers` | `u8` | Minimum worker pool size |
+| `max_workers` | `u8` | Maximum worker pool size |
+
+**Deposit:** 0.1 NEAR minimum
+
+**Returns:** `CoordinatorRecord`
+
+```bash
+near call registry.agents-coordinator.testnet register_coordinator \
+  '{"coordinator_did":"did:key:z6Mk...","endpoint_url":"https://coord.example.com","cvm_id":"cvm-1","min_workers":1,"max_workers":5}' \
+  --accountId your-account.testnet \
+  --deposit 0.1
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="register_worker" method="CALL" path="registry.agents-coordinator.testnet">
+
+Register or update a worker under an active coordinator. Requires 0.1 NEAR deposit. The referenced `coordinator_did` must exist and be active.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `coordinator_did` | `String` | DID of the coordinator to join |
+| `worker_did` | `String` | Worker's DID (must start with `did:`) |
+| `endpoint_url` | `String` | Worker's public endpoint URL |
+| `cvm_id` | `String` | TEE CVM identifier |
+
+**Deposit:** 0.1 NEAR minimum
+
+**Returns:** `WorkerRecord`
+
+```bash
+near call registry.agents-coordinator.testnet register_worker \
+  '{"coordinator_did":"did:key:z6Mk...","worker_did":"did:key:z6Mk...","endpoint_url":"https://worker.example.com","cvm_id":"cvm-w-1"}' \
+  --accountId your-account.testnet \
+  --deposit 0.1
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="update_worker_endpoint" method="CALL" path="registry.agents-coordinator.testnet">
+
+Update a worker's endpoint URL. Only callable by the worker's original registrant account or the admin.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `worker_did` | `String` | Worker DID to update |
+| `endpoint_url` | `String` | New endpoint URL |
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="deactivate_worker" method="CALL" path="registry.agents-coordinator.testnet">
+
+Deactivate a worker. The record is preserved but the worker will not appear in active queries. Only callable by the worker's registrant account or admin.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `worker_did` | `String` | Worker DID to deactivate |
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="deactivate_coordinator" method="CALL" path="registry.agents-coordinator.testnet">
+
+Deactivate a coordinator. Workers cannot register under an inactive coordinator. Only callable by the coordinator's registrant account or admin.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `coordinator_did` | `String` | Coordinator DID to deactivate |
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="set_min_deposit" method="CALL" path="registry.agents-coordinator.testnet">
+
+Set the minimum registration deposit. Admin only.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `amount_yocto` | `String` | New minimum deposit in yoctoNEAR |
+
+</ApiMethod>
+
+---
+
+## View Methods
+
+<ApiMethod name="get_workers_for_coordinator" method="VIEW" path="registry.agents-coordinator.testnet">
+
+Returns all active workers registered under a given coordinator DID. This is the primary discovery method used by the coordinator agent before each proposal.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `coordinator_did` | `String` | Coordinator DID to query |
+
+**Returns:** `Vec<WorkerRecord>` (active workers only)
+
+```bash
+near view registry.agents-coordinator.testnet get_workers_for_coordinator \
+  '{"coordinator_did":"did:key:z6Mk..."}'
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_worker_by_did" method="VIEW" path="registry.agents-coordinator.testnet">
+
+Look up a single worker by DID.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `worker_did` | `String` | Worker DID to look up |
+
+**Returns:** `Option<WorkerRecord>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_coordinator_by_did" method="VIEW" path="registry.agents-coordinator.testnet">
+
+Look up a single coordinator by DID.
+
+**Parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `coordinator_did` | `String` | Coordinator DID to look up |
+
+**Returns:** `Option<CoordinatorRecord>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="list_active_workers" method="VIEW" path="registry.agents-coordinator.testnet">
+
+List all active workers across all coordinators.
+
+**Returns:** `Vec<WorkerRecord>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="list_active_coordinators" method="VIEW" path="registry.agents-coordinator.testnet">
+
+List all active coordinators.
+
+**Returns:** `Vec<CoordinatorRecord>`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_stats" method="VIEW" path="registry.agents-coordinator.testnet">
+
+Returns registry statistics: total and active counts for coordinators and workers.
+
+**Returns:**
+
+```json
+{
+  "total_coordinators": 1,
+  "active_coordinators": 1,
+  "total_workers": 3,
+  "active_workers": 3
+}
+```
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_admin" method="VIEW" path="registry.agents-coordinator.testnet">
+
+Returns the admin account ID.
+
+**Returns:** `AccountId`
+
+</ApiMethod>
+
+---
+
+<ApiMethod name="get_min_deposit" method="VIEW" path="registry.agents-coordinator.testnet">
+
+Returns the current minimum deposit as a yoctoNEAR string.
+
+**Returns:** `String`
+
+</ApiMethod>

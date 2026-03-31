@@ -1,0 +1,84 @@
+---
+title: Architecture Overview
+order: 0
+---
+
+# Architecture Overview
+
+Delibera is a privacy-preserving multi-agent DAO coordination protocol. Individual AI votes stay private; only aggregate tallies are settled on-chain via NEAR yield/resume.
+
+## System Layers
+
+<MermaidDiagram chart={`
+graph TB
+    NEAR["NEAR Blockchain<br/><i>Settlement — proposals, tallies, nullifiers</i>"]
+    COORD["Coordinator Agent<br/><i>Orchestration — dispatch, tally, resume</i>"]
+    WORKERS["Worker Agents<br/><i>AI deliberation — vote + reasoning</i>"]
+    ENSUE["Ensue Memory Network<br/><i>Hot state — real-time coordination</i>"]
+    STORACHA["Storacha + Lit Protocol<br/><i>Warm storage — encrypted persistent memory</i>"]
+    AI["NEAR AI (DeepSeek-V3.1)<br/><i>LLM — structured voting via dao_vote tool</i>"]
+
+    NEAR <--> COORD
+    COORD <--> ENSUE
+    WORKERS <--> ENSUE
+    WORKERS --> AI
+    WORKERS <--> STORACHA
+    COORD --> STORACHA
+`} />
+
+## Layer Roles
+
+### NEAR Blockchain (Settlement)
+
+The on-chain layer manages proposal lifecycle, manifesto storage, and result finalization. The coordinator contract uses NEAR's yield/resume pattern: `start_coordination` creates a yielded promise that suspends until an off-chain coordinator provides the aggregated result. SHA256 hashes verify integrity end-to-end, and a nullifier pattern prevents double-voting.
+
+**Deployed contracts:**
+- Coordinator: `coordinator.agents-coordinator.testnet`
+- Registry: `registry.agents-coordinator.testnet`
+
+### Coordinator Agent (Orchestration)
+
+A TypeScript service (port 3000) that bridges on-chain proposals and off-chain workers. It polls the contract for pending proposals, discovers workers from the registry, dispatches tasks via Ensue, monitors completion, tallies votes, and resumes the contract with only the aggregate result. See [Coordinator](/docs/architecture/coordinator) for details.
+
+### Worker Agents (AI Deliberation)
+
+Independent AI-powered agents, each with a sovereign `did:key` identity. Workers poll Ensue for tasks, fetch the DAO manifesto from the contract, call NEAR AI for structured voting, and write results back to their private Ensue namespace. See [Workers](/docs/architecture/workers) for details.
+
+### Ensue Memory Network (Hot State)
+
+A permissioned, off-chain key-value store with a JSON-RPC 2.0 API over SSE. Agents running in TEEs cannot directly communicate -- Ensue provides the asynchronous coordination channel. Worker votes, reasoning, and processing metadata live exclusively here and never reach the blockchain.
+
+### Storacha + Lit Protocol (Persistent Storage)
+
+Decentralized, content-addressed storage with UCAN authorization. All sensitive data is encrypted with Lit Protocol threshold keys before upload. Each worker has a per-agent Storacha space for memory isolation. Storacha automatically creates Filecoin deals for permanent archival.
+
+<Callout type="tip">
+Storacha is the agent's **persistent memory**, not just a backup tier. Agents accumulate knowledge, preferences, and values over time. Memory is read at deliberation START (informing AI reasoning) and updated at END (capturing new learnings).
+</Callout>
+
+### NEAR AI (LLM Layer)
+
+DeepSeek-V3.1 via NEAR AI's OpenAI-compatible API. Workers call the model with the DAO manifesto and proposal, forcing a structured `dao_vote` tool call that returns `{vote, reasoning}`. Each call produces an ECDSA-signed verification proof.
+
+## Interaction Flow
+
+1. A user calls `start_coordination(task_config)` on the NEAR contract
+2. The contract creates a yielded promise (~200 block timeout, ~100s on testnet)
+3. The coordinator detects the pending proposal and snapshots registered workers from the registry
+4. The coordinator writes task config to Ensue and sets each worker's status to `pending`
+5. Each worker independently loads its persistent memory from Storacha, fetches the manifesto, calls NEAR AI, and writes its vote to its private Ensue namespace
+6. The coordinator detects all workers completed, tallies votes, records nullifier hashes on-chain
+7. The coordinator resumes the contract with **only** `{approved, rejected, decision, workerCount}`
+8. The contract validates hashes and stores the finalized result
+
+## Tiered Storage
+
+| Tier | System | Data | Lifetime | Encryption |
+|------|--------|------|----------|------------|
+| Hot | Ensue | Real-time task state, agent working memory | Session | AES-256-GCM |
+| Warm | Storacha | Agent profiles, encrypted transcripts | Persistent | Lit threshold encryption |
+| Cold | Filecoin | Finalized deliberation records | Permanent | Inherited from Storacha |
+
+## Privacy Model
+
+Individual votes and reasoning never appear on-chain. The coordinator aggregates privately and submits only the tally. Worker isolation (separate Ensue namespaces), nullifier hashes (double-vote prevention without revealing content), and TEE enforcement (production) provide layered privacy guarantees.

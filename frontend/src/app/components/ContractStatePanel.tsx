@@ -413,8 +413,8 @@ function ProposalCard({
                     key={ws.worker_id}
                     className="flex items-center justify-between p-1.5 rounded bg-zinc-900/60"
                   >
-                    <span className="font-mono text-zinc-400">
-                      {ws.worker_id}
+                    <span className="font-mono text-zinc-400" title={ws.worker_id}>
+                      {ws.worker_id.startsWith("did:key:") ? ws.worker_id.slice(8, 24) + "…" : ws.worker_id}
                     </span>
                     <span className="font-mono text-zinc-600 text-[9px]">
                       {ws.result_hash.slice(0, 16)}...

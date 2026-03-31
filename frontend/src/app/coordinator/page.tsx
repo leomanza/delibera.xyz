@@ -373,11 +373,11 @@ function CoordinatorContent() {
         </div>
         {workers.map((w) => {
           const status = workerStatuses?.workers[w.worker_id] || "unknown";
-          const name = workerStatuses?.workerNames?.[w.worker_id];
+          const name = workerStatuses?.workerNames?.[w.worker_id] || w.display_name;
           return (
             <div key={w.worker_id} className="flex items-center gap-2 text-xs text-zinc-400 font-mono">
               <StatusDot status={workerError ? "offline" : status} />
-              <span title={w.worker_id}>{name || truncateDid(w.worker_id)}</span>
+              <span title={w.worker_id}>{name || w.account_id || truncateDid(w.worker_id)}</span>
             </div>
           );
         })}
@@ -392,7 +392,7 @@ function CoordinatorContent() {
 
         {workers.map((w) => {
           const status = workerStatuses?.workers[w.worker_id] || "unknown";
-          const name = workerStatuses?.workerNames?.[w.worker_id];
+          const name = workerStatuses?.workerNames?.[w.worker_id] || w.display_name;
           return (
             <WorkerStatusCard
               key={w.worker_id}
@@ -452,10 +452,10 @@ function WorkerStatusCard({
           <StatusDot status={status} />
           <div>
             <h3 className="text-sm font-semibold text-zinc-100 font-mono" title={worker.worker_id}>
-              {displayName || truncateDid(worker.worker_id)}
+              {displayName || worker.account_id || truncateDid(worker.worker_id)}
             </h3>
             <p className="text-[10px] text-zinc-600 font-mono truncate max-w-[150px]" title={worker.worker_id}>
-              {displayName ? truncateDid(worker.worker_id) : worker.account_id || ""}
+              {(displayName || worker.account_id) ? truncateDid(worker.worker_id) : ""}
             </p>
           </div>
         </div>

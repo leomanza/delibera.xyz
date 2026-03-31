@@ -105,7 +105,7 @@ export default function PublicDashboard() {
           {workers.map((w) => {
             const status = workerStatuses?.workers[w.worker_id] || "unknown";
             const displayName = workerStatuses?.workerNames?.[w.worker_id];
-            const label = displayName || (w.worker_id.startsWith("did:") ? w.worker_id.substring(0, 16) + "..." : w.worker_id);
+            const label = displayName || w.account_id || (w.worker_id.startsWith("did:") ? w.worker_id.substring(0, 16) + "..." : w.worker_id);
             return (
               <div key={w.worker_id} className="flex items-center gap-2 text-xs text-zinc-400 font-mono">
                 <StatusDot status={workerError ? "offline" : status} />
@@ -212,22 +212,17 @@ export default function PublicDashboard() {
               {workers.map((w) => {
                 const status = workerStatuses?.workers[w.worker_id] || "unknown";
                 const displayName = workerStatuses?.workerNames?.[w.worker_id];
-                const truncatedDid = w.worker_id.startsWith("did:") ? w.worker_id.substring(0, 24) + "..." : null;
+                const truncatedDid = w.worker_id.startsWith("did:") ? w.worker_id.substring(0, 20) + "..." : null;
                 return (
                   <div key={w.worker_id} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-800/40">
                     <StatusDot status={workerError ? "offline" : status} />
                     <div>
                       <p className="text-xs font-mono text-zinc-300 font-semibold">
-                        {displayName || w.worker_id}
+                        {displayName || w.account_id || w.worker_id}
                       </p>
-                      {truncatedDid && (
+                      {(displayName || w.account_id) && truncatedDid && (
                         <p className="text-[10px] font-mono text-zinc-600 truncate max-w-[200px]">
                           {truncatedDid}
-                        </p>
-                      )}
-                      {w.account_id && (
-                        <p className="text-[10px] font-mono text-zinc-600 truncate max-w-[200px]">
-                          {w.account_id}
                         </p>
                       )}
                     </div>

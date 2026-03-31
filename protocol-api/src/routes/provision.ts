@@ -656,4 +656,29 @@ provision.post('/coordinator-register', async (c) => {
   });
 });
 
+/**
+ * POST /api/provision/external-worker
+ * Generate an identity (DID + private key) for an existing external agent.
+ * No Phala or Storacha provisioning — the agent owner manages their own infrastructure.
+ * Returns the DID and private key so the frontend can trigger the NEAR registry tx.
+ */
+provision.post('/external-worker', async (c) => {
+  const body = await c.req.json<{
+    displayName: string;
+    nearAccount: string;
+    endpointUrl: string;
+    coordinatorDid: string;
+  }>();
+
+  if (!body.displayName || !body.nearAccount || !body.endpointUrl || !body.coordinatorDid) {
+    return c.json({ error: 'displayName, nearAccount, endpointUrl, and coordinatorDid are required' }, 400);
+  }
+
+  const { workerDid, privateKeyString } = await generateWorkerIdentity();
+
+  console.log(`[provision/external-worker] Generated identity for ${body.nearAccount}: ${workerDid.substring(0, 24)}...`);
+
+  return c.json({ workerDid, privateKeyString });
+});
+
 export default provision;
