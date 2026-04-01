@@ -37,7 +37,6 @@ export default function WorkerManagementPanel({ onWorkerChanged }: Props) {
   const [removing, setRemoving] = useState<string | null>(null);
 
   const workers = data?.workers ?? [];
-  console.log("Registered workers:", workers);
 
   async function handleRegister() {
     if (!newWorkerId.trim() || submitting) return;

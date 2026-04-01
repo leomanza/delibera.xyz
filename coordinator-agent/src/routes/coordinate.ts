@@ -293,6 +293,54 @@ app.patch('/workers/:did/name', async (c) => {
 });
 
 /**
+ * POST /api/coordinate/workers/register
+ * Register a worker on the registry contract (on-chain).
+ */
+app.post('/workers/register', async (c) => {
+  try {
+    const body = await c.req.json<{ workerId: string; accountId?: string }>();
+    if (!body.workerId) {
+      return c.json({ error: 'workerId is required' }, 400);
+    }
+    const { localRegisterWorkerInRegistry } = await import('../contract/local-contract');
+    const coordinatorDID = await getAgentDid();
+    const endpointUrl = body.workerId; // placeholder — worker updates its own endpoint on boot
+    const success = await localRegisterWorkerInRegistry(
+      coordinatorDID,
+      body.workerId,
+      endpointUrl,
+      'manual',
+    );
+    if (!success) {
+      return c.json({ error: 'Registration failed on-chain' }, 500);
+    }
+    return c.json({ message: `Worker ${body.workerId} registered on-chain` });
+  } catch (error) {
+    console.error('Error registering worker:', error);
+    return c.json({ error: 'Failed to register worker' }, 500);
+  }
+});
+
+/**
+ * DELETE /api/coordinate/workers/:did
+ * Remove a worker from the coordinator contract (on-chain).
+ */
+app.delete('/workers/:did', async (c) => {
+  try {
+    const did = decodeURIComponent(c.req.param('did'));
+    const { localRemoveWorker } = await import('../contract/local-contract');
+    const success = await localRemoveWorker(did);
+    if (!success) {
+      return c.json({ error: 'Removal failed on-chain' }, 500);
+    }
+    return c.json({ message: `Worker ${did} removed` });
+  } catch (error) {
+    console.error('Error removing worker:', error);
+    return c.json({ error: 'Failed to remove worker' }, 500);
+  }
+});
+
+/**
  * GET /api/coordinate/pending
  * Get pending coordinations from contract
  */

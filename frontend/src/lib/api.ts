@@ -279,7 +279,7 @@ export async function registerWorker(
   workerId: string,
   accountId?: string
 ): Promise<{ message: string } | null> {
-  return safeFetch(`${API_URL}/api/workers/register`, {
+  return safeFetch(`${getCoordinatorUrl()}/api/coordinate/workers/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ workerId, accountId }),
@@ -287,7 +287,7 @@ export async function registerWorker(
 }
 
 export async function removeWorker(workerId: string): Promise<{ message: string } | null> {
-  return safeFetch(`${API_URL}/api/workers/${workerId}`, {
+  return safeFetch(`${getCoordinatorUrl()}/api/coordinate/workers/${workerId}`, {
     method: "DELETE",
   });
 }

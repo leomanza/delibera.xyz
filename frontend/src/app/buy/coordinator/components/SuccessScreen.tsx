@@ -172,10 +172,10 @@ export default function SuccessScreen({
         </button>
 
         <Link
-          href="/dashboard"
+          href="/coordinator"
           className="w-full px-4 py-2.5 rounded bg-[#00ff41]/10 border border-[#00ff41]/30 text-xs font-semibold text-[#00ff41] font-mono hover:bg-[#00ff41]/15 transition-all text-center"
         >
-          View in Dashboard
+          View in Coordinator Dashboard
         </Link>
 
         <button
