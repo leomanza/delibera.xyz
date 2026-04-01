@@ -2,7 +2,7 @@ import { MDXRemote } from "next-mdx-remote/rsc";
 import { highlightCode } from "./highlight";
 import { Callout } from "@/components/mdx/Callout";
 import { ApiMethod } from "@/components/mdx/ApiMethod";
-import { Tabs } from "@/components/mdx/Tabs";
+import { Tabs, Tab } from "@/components/mdx/Tabs";
 import { MermaidDiagram } from "@/components/mdx/MermaidDiagram";
 import { CodeBlock } from "@/components/mdx/CodeBlock";
 
@@ -62,6 +62,7 @@ const components = {
   Callout,
   ApiMethod,
   Tabs,
+  Tab,
   MermaidDiagram,
 };
 

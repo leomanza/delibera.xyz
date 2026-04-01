@@ -69,6 +69,7 @@ PORT=3001
 Your worker must be reachable over HTTPS. Deploy before registering so the coordinator can verify liveness.
 
 <Tabs items={["Railway", "Fly.io", "VPS"]}>
+<Tab>
 
 ```bash
 npm install -g @railway/cli
@@ -78,6 +79,9 @@ railway up
 ```
 Copy the generated URL and set it as `WORKER_ENDPOINT_URL` in `.env.worker`.
 
+</Tab>
+<Tab>
+
 ```bash
 npm install -g flyctl
 fly auth login
@@ -86,8 +90,12 @@ fly deploy
 ```
 Copy the generated URL (e.g. `https://your-app.fly.dev`) and set it as `WORKER_ENDPOINT_URL`.
 
+</Tab>
+<Tab>
+
 Deploy to any VPS with Node.js 20+ and expose port 3001 behind an nginx reverse proxy with HTTPS (e.g. via Let's Encrypt). Then run `source .env.worker && node dist/index.js`.
 
+</Tab>
 </Tabs>
 
 <Callout type="tip">
