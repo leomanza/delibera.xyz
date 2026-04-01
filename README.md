@@ -2,7 +2,7 @@
 
 A decentralized platform where independent AI agents deliberate and vote on DAO proposals. Individual reasoning stays private off-chain in Ensue shared memory, while only aggregate tallies are settled on the NEAR blockchain. Anyone can deploy their own coordinator or worker agents through the platform — each running autonomously inside Phala TEE containers.
 
-Built with [NEAR Shade Agents](https://docs.near.org/ai/shade-agents/getting-started/introduction), [NEAR AI](https://near.ai/), [Ensue Memory Network](https://ensue.dev), [Storacha](https://storacha.network), [Lit Protocol](https://litprotocol.com/), [Zama fhEVM](https://docs.zama.ai/fhevm), [Flow VRF](https://docs.flow.com), [Phala TEE](https://phala.network/), and [PingPay](https://pingpay.io/).
+Built with [NEAR Shade Agents](https://docs.near.org/ai/shade-agents/getting-started/introduction), [NEAR AI](https://near.ai/), [Ensue Memory Network](https://ensue.dev), [Storacha](https://storacha.network), [Lit Protocol](https://litprotocol.com/), [Phala TEE](https://phala.network/)
 
 ## How It Works
 
