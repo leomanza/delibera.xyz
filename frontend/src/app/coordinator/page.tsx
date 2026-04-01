@@ -398,7 +398,7 @@ function CoordinatorContent() {
               key={w.worker_id}
               worker={w}
               status={workerError ? "offline" : status}
-              displayName={name}
+              displayName={name ?? undefined}
             />
           );
         })}

@@ -185,7 +185,8 @@ export async function logArchivalToNear(
     );
     const client = createEnsueClient();
 
-    const archivalKey = `coordination/archival/${proposalId}`;
+    const { K } = await import('@near-shade-coordination/shared');
+    const archivalKey = K(`coordination/archival/${proposalId}`);
     await client.updateMemory(
       archivalKey,
       JSON.stringify({

@@ -1,4 +1,4 @@
-import { EnsueClient, createEnsueClient, MEMORY_KEYS } from '@near-shade-coordination/shared';
+import { EnsueClient, createEnsueClient, MEMORY_KEYS, K } from '@near-shade-coordination/shared';
 import { TaskStatus, getWorkerKeys } from '@near-shade-coordination/shared';
 import type { TaskConfig, WorkerResult, WorkerStatusInfo, VerificationProof } from '@near-shade-coordination/shared';
 import { aiVote } from './ai-voter';
@@ -377,7 +377,7 @@ export async function initializeWorker(): Promise<void> {
     // Step 3: Set display name if provided (non-blocking)
     const displayName = process.env.WORKER_DISPLAY_NAME;
     if (displayName && _workerDID) {
-      getEnsueClient().updateMemory(`agent/${_workerDID}/display_name`, displayName)
+      getEnsueClient().updateMemory(K(`agent/${_workerDID}/display_name`), displayName)
         .then(() => console.log(`[worker] Display name set: "${displayName}"`))
         .catch(e => console.warn(`[worker] Display name set failed (non-fatal):`, e));
     }

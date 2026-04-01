@@ -40,6 +40,12 @@ function Nav() {
       </div>
       <div className="flex items-center gap-4">
         <a
+          href="https://docs.delibera.xyz"
+          className="text-xs text-zinc-600 hover:text-[#00ff41] transition-colors font-mono hidden sm:block"
+        >
+          [docs]
+        </a>
+        <a
           href="https://github.com/leomanza/near-shade-coordination"
           target="_blank"
           rel="noopener noreferrer"
@@ -125,11 +131,11 @@ function Hero() {
           coordinator
         </Link>
         <a
-          href="#what"
+          href="https://docs.delibera.xyz"
           className="px-6 py-3 rounded border border-zinc-800 text-sm text-zinc-500 font-mono
                      hover:border-zinc-600 hover:text-zinc-300 transition-all"
         >
-          learn more
+          explore docs
         </a>
       </div>
     </section>

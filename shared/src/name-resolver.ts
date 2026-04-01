@@ -9,6 +9,7 @@
  */
 
 import { createEnsueClient, type EnsueClient } from './ensue-client';
+import { K } from './constants';
 
 export class NameResolver {
   private cache: Map<string, string> = new Map();
@@ -27,7 +28,7 @@ export class NameResolver {
     if (cached) return cached;
 
     try {
-      const name = await this.ensue.readMemory(`agent/${did}/display_name`);
+      const name = await this.ensue.readMemory(K(`agent/${did}/display_name`));
       if (name && name.trim()) {
         this.cache.set(did, name);
         return name;
@@ -53,7 +54,7 @@ export class NameResolver {
    * Set a display name (writes to Ensue and updates cache).
    */
   async setName(did: string, name: string): Promise<void> {
-    await this.ensue.updateMemory(`agent/${did}/display_name`, name);
+    await this.ensue.updateMemory(K(`agent/${did}/display_name`), name);
     this.cache.set(did, name);
   }
 

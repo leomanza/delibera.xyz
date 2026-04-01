@@ -110,12 +110,12 @@ async function main() {
   console.log('\nStoring data in Ensue (AES-encrypted)...');
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore — direct path import; package name not resolvable from scripts/
-  const { createEnsueClient } = await import('../shared/dist/index.js');
+  const { createEnsueClient, ENSUE_PREFIX } = await import('../shared/dist/index.js');
   const ensue = createEnsueClient();
   const { encryptForEnsue } = await import('../worker-agent/src/storacha/local-crypto');
 
   // AES-encrypted JSON in Ensue (primary read path — fast, reliable, private)
-  const keyPrefix = `agent/${workerDid}`;
+  const keyPrefix = `${ENSUE_PREFIX}agent/${workerDid}`;
 
   await ensue.updateMemory(`${keyPrefix}/manifesto`, await encryptForEnsue(manifesto));
   console.log(`  ✓ ${keyPrefix}/manifesto (AES-encrypted)`);

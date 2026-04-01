@@ -8,6 +8,7 @@ import {
   getAgentRegistryKeys,
   getCoordinatorSnapshotKey,
   PROPOSAL_INDEX_KEY,
+  ENSUE_PREFIX,
 } from '@near-shade-coordination/shared';
 import { getAgentDid } from '../storacha/identity';
 import { triggerLocalCoordination } from '../monitor/memory-monitor';
@@ -377,7 +378,7 @@ app.post('/reset', async (c) => {
     console.log('Resetting coordinator memory...');
 
     // Clear coordinator memory
-    await getEnsueClient().clearPrefix('coordination/coordinator/');
+    await getEnsueClient().clearPrefix(`${ENSUE_PREFIX}coordination/coordinator/`);
 
     // Reset all worker statuses (by DID)
     const workerDids = await getWorkerDIDs();

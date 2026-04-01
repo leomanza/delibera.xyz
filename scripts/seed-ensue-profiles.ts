@@ -28,7 +28,7 @@ async function main() {
   const profiles: Record<string, SeedProfile> = JSON.parse(raw);
 
   // @ts-ignore — direct path import
-  const { createEnsueClient } = await import('../shared/dist/index.js');
+  const { createEnsueClient, K } = await import('../shared/dist/index.js');
   const ensue = createEnsueClient();
 
   for (const [workerId, profile] of Object.entries(profiles)) {
@@ -50,17 +50,17 @@ async function main() {
       updatedAt: new Date().toISOString(),
     };
 
-    await ensue.updateMemory(`agent/${workerId}/manifesto`, JSON.stringify(manifesto));
-    console.log(`  ✓ agent/${workerId}/manifesto`);
+    await ensue.updateMemory(K(`agent/${workerId}/manifesto`), JSON.stringify(manifesto));
+    console.log(`  ✓ ${K(`agent/${workerId}/manifesto`)}`);
 
-    await ensue.updateMemory(`agent/${workerId}/preferences`, JSON.stringify(preferences));
-    console.log(`  ✓ agent/${workerId}/preferences`);
+    await ensue.updateMemory(K(`agent/${workerId}/preferences`), JSON.stringify(preferences));
+    console.log(`  ✓ ${K(`agent/${workerId}/preferences`)}`);
 
-    await ensue.updateMemory(`agent/${workerId}/decisions`, JSON.stringify([]));
-    console.log(`  ✓ agent/${workerId}/decisions`);
+    await ensue.updateMemory(K(`agent/${workerId}/decisions`), JSON.stringify([]));
+    console.log(`  ✓ ${K(`agent/${workerId}/decisions`)}`);
 
-    await ensue.updateMemory(`agent/${workerId}/knowledge`, JSON.stringify([]));
-    console.log(`  ✓ agent/${workerId}/knowledge`);
+    await ensue.updateMemory(K(`agent/${workerId}/knowledge`), JSON.stringify([]));
+    console.log(`  ✓ ${K(`agent/${workerId}/knowledge`)}`);
   }
 
   console.log('\nDone. All worker profiles seeded in Ensue.');

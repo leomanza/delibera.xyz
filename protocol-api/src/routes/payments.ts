@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { EnsueClient, createEnsueClient } from '@near-shade-coordination/shared';
+import { EnsueClient, createEnsueClient, K } from '@near-shade-coordination/shared';
 
 const app = new Hono();
 
@@ -107,7 +107,7 @@ app.post('/webhook', async (c) => {
     });
 
     try {
-      const key = `coordination/payments/events/${event.id || Date.now()}`;
+      const key = K(`coordination/payments/events/${event.id || Date.now()}`);
       await getEnsueClient().updateMemory(key, rawBody);
     } catch (e) {
       console.warn('Failed to store webhook event in Ensue:', e);

@@ -99,11 +99,15 @@ function getWorkerRecordsFromEnv(): WorkerRecord[] {
       }
     }
   } else {
-    entries.push(
-      { id: 'worker1', url: 'http://localhost:3001' },
-      { id: 'worker2', url: 'http://localhost:3002' },
-      { id: 'worker3', url: 'http://localhost:3003' },
-    );
+    // No WORKERS env — return empty. Registry-based discovery is the primary path.
+    // Only in explicit LOCAL_MODE dev does the hardcoded fallback make sense.
+    if (process.env.LOCAL_MODE === 'true') {
+      entries.push(
+        { id: 'worker1', url: 'http://localhost:3001' },
+        { id: 'worker2', url: 'http://localhost:3002' },
+        { id: 'worker3', url: 'http://localhost:3003' },
+      );
+    }
   }
 
   return entries.map(e => ({

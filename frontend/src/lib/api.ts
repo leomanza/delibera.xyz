@@ -43,13 +43,23 @@ export async function updateAgentEndpoint(agentId: string, endpoint: string, cvm
 
 /** Dynamic worker URLs - checks registry-backed endpoints, falls back to localhost */
 function getWorkerUrl(workerId: string): string {
+  // 1. Check cached endpoint (populated by fetchAgentEndpoints)
   if (_agentEndpointsCache[workerId]) return _agentEndpointsCache[workerId];
-  const envKey = `NEXT_PUBLIC_${workerId.toUpperCase()}_URL`;
-  if (typeof window === "undefined") {
-    return process.env[envKey] || `http://localhost:${3000 + parseInt(workerId.replace("worker", "")) || 1}`;
-  }
+
+  // 2. Legacy "workerN" IDs → derive port directly
   const num = parseInt(workerId.replace("worker", ""));
-  return `http://localhost:${3000 + (num || 1)}`;
+  if (!isNaN(num) && num > 0) {
+    const envKey = `NEXT_PUBLIC_WORKER${num}_URL`;
+    if (typeof window === "undefined" && process.env[envKey]) {
+      return process.env[envKey]!;
+    }
+    return `http://localhost:${3000 + num}`;
+  }
+
+  // 3. DID-based IDs without cached endpoint — default to port 3001
+  //    (endpoints should be loaded via ensureAgentEndpoints before this is called)
+  console.warn(`[api] No endpoint for worker ${workerId.substring(0, 24)}... — call ensureAgentEndpoints() first`);
+  return `http://localhost:3001`;
 }
 
 /** Ensure agent endpoints are loaded (call once on page load) */
@@ -125,13 +135,15 @@ export async function getWorkerStatuses(): Promise<WorkerStatuses | null> {
   const raw = await safeFetch<any>(`${getCoordinatorUrl()}/api/coordinate/workers`);
   if (!raw) return null;
 
-  // Registry-based response: workers is an array with DID + ensue_status + display_name
+  // Registry-based response: workers is an array with DID + ensue_status + display_name + endpoint_url
   if (raw.source === "registry" && Array.isArray(raw.workers)) {
     const workers: Record<string, string> = {};
     const workerNames: Record<string, string> = {};
     for (const w of raw.workers) {
       workers[w.did] = w.ensue_status || (w.is_active ? "idle" : "offline");
       if (w.display_name) workerNames[w.did] = w.display_name;
+      // Populate endpoint cache so getWorkerUrl(did) resolves correctly
+      if (w.endpoint_url) _agentEndpointsCache[w.did] = w.endpoint_url;
     }
     return { workers, workerNames, timestamp: raw.timestamp, source: "registry" };
   }

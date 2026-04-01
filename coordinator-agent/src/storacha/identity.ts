@@ -42,10 +42,9 @@ async function loadModules() {
  * Check whether all required Storacha env vars are set.
  */
 export function isStorachaConfigured(): boolean {
-  return !!(
-    process.env.STORACHA_AGENT_PRIVATE_KEY &&
-    process.env.STORACHA_DELEGATION_PROOF
-  );
+  const hasKey = !!(process.env.STORACHA_AGENT_PRIVATE_KEY || process.env.COORDINATOR_STORACHA_PRIVATE_KEY);
+  const hasProof = !!(process.env.STORACHA_DELEGATION_PROOF || process.env.COORDINATOR_STORACHA_DELEGATION_BASE64);
+  return hasKey && hasProof;
 }
 
 /**
@@ -55,10 +54,10 @@ export function isStorachaConfigured(): boolean {
 async function getSigner() {
   if (!_signer) {
     await loadModules();
-    const key = process.env.STORACHA_AGENT_PRIVATE_KEY;
+    const key = process.env.STORACHA_AGENT_PRIVATE_KEY || process.env.COORDINATOR_STORACHA_PRIVATE_KEY;
     if (!key) {
       throw new Error(
-        'STORACHA_AGENT_PRIVATE_KEY is not set. Run `storacha key create` to generate one.'
+        'STORACHA_AGENT_PRIVATE_KEY (or COORDINATOR_STORACHA_PRIVATE_KEY) is not set. Run `storacha key create` to generate one.'
       );
     }
     _signer = _Signer!.Signer.parse(key);
@@ -85,10 +84,10 @@ export async function createStorachaClient() {
   await loadModules();
   const signer = await getSigner();
 
-  const delegationProof = process.env.STORACHA_DELEGATION_PROOF;
+  const delegationProof = process.env.STORACHA_DELEGATION_PROOF || process.env.COORDINATOR_STORACHA_DELEGATION_BASE64;
   if (!delegationProof) {
     throw new Error(
-      'STORACHA_DELEGATION_PROOF is not set. Run `storacha delegation create <DID> --base64` to generate one.'
+      'STORACHA_DELEGATION_PROOF (or COORDINATOR_STORACHA_DELEGATION_BASE64) is not set. Run `storacha delegation create <DID> --base64` to generate one.'
     );
   }
 

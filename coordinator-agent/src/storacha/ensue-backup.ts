@@ -6,7 +6,7 @@
  * into a single JSON snapshot, then calls encryptAndVault().
  */
 
-import { createEnsueClient, EnsueClient } from '@near-shade-coordination/shared';
+import { createEnsueClient, EnsueClient, ENSUE_PREFIX } from '@near-shade-coordination/shared';
 import { encryptAndVault, isVaultConfigured } from './vault';
 
 let _ensueClient: EnsueClient | null = null;
@@ -21,7 +21,7 @@ function getEnsueClient(): EnsueClient {
  */
 export async function serializeEnsueTree(): Promise<Record<string, string>> {
   const client = getEnsueClient();
-  const keys = await client.listKeys('coordination/');
+  const keys = await client.listKeys(`${ENSUE_PREFIX}coordination/`);
 
   if (keys.length === 0) {
     console.log('[ensue-backup] No keys found under coordination/');
