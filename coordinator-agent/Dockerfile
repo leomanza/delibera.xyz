@@ -9,7 +9,7 @@ RUN cd shared && npm install && npm run build
 
 # Copy coordinator-agent
 COPY coordinator-agent/package.json coordinator-agent/tsconfig.json ./coordinator-agent/
-RUN cd coordinator-agent && npm install
+RUN cd coordinator-agent && npm install --legacy-peer-deps
 COPY coordinator-agent/src ./coordinator-agent/src
 RUN cd coordinator-agent && npm run build
 

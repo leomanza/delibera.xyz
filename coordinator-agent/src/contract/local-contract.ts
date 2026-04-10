@@ -375,7 +375,7 @@ export async function localRegisterWorkerInRegistry(
   workerDid: string,
   endpointUrl: string,
   cvmId: string,
-): Promise<boolean> {
+): Promise<{ success: boolean; error?: string }> {
   try {
     await localCallRegistry('register_worker', {
       coordinator_did: coordinatorDid,
@@ -385,9 +385,10 @@ export async function localRegisterWorkerInRegistry(
     }, DEPOSIT_0_1_NEAR);
 
     console.log(`[REGISTRY] Worker registered: ${workerDid} → coordinator ${coordinatorDid}`);
-    return true;
+    return { success: true };
   } catch (error: any) {
-    console.error(`[REGISTRY] register_worker failed:`, (error.message || '').substring(0, 300));
-    return false;
+    const msg = (error.message || '').substring(0, 500);
+    console.error(`[REGISTRY] register_worker failed:`, msg);
+    return { success: false, error: msg };
   }
 }

@@ -295,29 +295,90 @@ app.patch('/workers/:did/name', async (c) => {
 /**
  * POST /api/coordinate/workers/register
  * Register a worker on the registry contract (on-chain).
+ *
+ * Accepts either:
+ *   { endpointUrl: "https://...worker-url" }           → probes URL to discover DID
+ *   { workerId: "did:key:z6Mk..." }                    → uses DID directly
+ *   { endpointUrl: "https://...", workerId: "did:..." } → uses both as-is
  */
 app.post('/workers/register', async (c) => {
   try {
-    const body = await c.req.json<{ workerId: string; accountId?: string }>();
-    if (!body.workerId) {
-      return c.json({ error: 'workerId is required' }, 400);
+    const body = await c.req.json<{ workerId?: string; endpointUrl?: string; accountId?: string }>();
+
+    let workerDid = body.workerId?.trim() || '';
+    let endpointUrl = body.endpointUrl?.trim() || '';
+
+    // If input looks like a URL but was passed as workerId, treat it as endpointUrl
+    if (workerDid.startsWith('http') && !endpointUrl) {
+      endpointUrl = workerDid;
+      workerDid = '';
     }
+
+    // Probe the worker endpoint to discover its DID (and verify it's reachable)
+    if (endpointUrl) {
+      const probeUrl = endpointUrl.replace(/\/+$/, '');
+      try {
+        const res = await fetch(`${probeUrl}/`, { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) {
+          return c.json({ error: `Worker endpoint returned HTTP ${res.status}` }, 400);
+        }
+        const info = await res.json() as { workerDid?: string; status?: string };
+        if (!info.workerDid) {
+          return c.json({ error: 'Worker endpoint did not return a workerDid field' }, 400);
+        }
+        if (workerDid && workerDid !== info.workerDid) {
+          return c.json({
+            error: `DID mismatch: provided ${workerDid} but worker reports ${info.workerDid}`,
+          }, 400);
+        }
+        workerDid = info.workerDid;
+        console.log(`[register] Discovered worker DID from endpoint: ${workerDid}`);
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : 'unknown error';
+        return c.json({ error: `Cannot reach worker at ${endpointUrl}: ${reason}` }, 400);
+      }
+    }
+
+    if (!workerDid) {
+      return c.json({ error: 'Provide a worker endpoint URL or a DID (did:key:z6Mk...)' }, 400);
+    }
+    if (!workerDid.startsWith('did:')) {
+      return c.json({ error: `Invalid worker DID "${workerDid}" — must start with "did:"` }, 400);
+    }
+    if (!endpointUrl) {
+      return c.json({ error: 'Worker endpoint URL is required for registry registration' }, 400);
+    }
+
     const { localRegisterWorkerInRegistry } = await import('../contract/local-contract');
-    const coordinatorDID = await getAgentDid();
-    const endpointUrl = body.workerId; // placeholder — worker updates its own endpoint on boot
-    const success = await localRegisterWorkerInRegistry(
+    let coordinatorDID: string;
+    try {
+      coordinatorDID = await getAgentDid();
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : 'unknown';
+      return c.json({ error: `Cannot resolve coordinator DID: ${reason}` }, 500);
+    }
+
+    console.log(`[register] Registering worker ${workerDid} → coordinator ${coordinatorDID} (endpoint: ${endpointUrl})`);
+    const result = await localRegisterWorkerInRegistry(
       coordinatorDID,
-      body.workerId,
+      workerDid,
       endpointUrl,
       'manual',
     );
-    if (!success) {
-      return c.json({ error: 'Registration failed on-chain' }, 500);
+    if (!result.success) {
+      return c.json({
+        error: 'Registration failed on-chain.',
+        details: result.error || 'Unknown error',
+      }, 500);
     }
-    return c.json({ message: `Worker ${body.workerId} registered on-chain` });
+
+    validationCache.delete(workerDid);
+
+    return c.json({ message: `Worker ${workerDid} registered on-chain`, workerDid, endpointUrl });
   } catch (error) {
     console.error('Error registering worker:', error);
-    return c.json({ error: 'Failed to register worker' }, 500);
+    const detail = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: `Failed to register worker: ${detail}` }, 500);
   }
 });
 

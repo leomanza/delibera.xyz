@@ -31,19 +31,24 @@ export default function WorkerManagementPanel({ onWorkerChanged }: Props) {
     10000
   );
 
-  const [newWorkerId, setNewWorkerId] = useState("");
+  const [workerInput, setWorkerInput] = useState("");
   const [newAccountId, setNewAccountId] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const workers = data?.workers ?? [];
 
   async function handleRegister() {
-    if (!newWorkerId.trim() || submitting) return;
+    const input = workerInput.trim();
+    if (!input || submitting) return;
     setSubmitting(true);
-    const result = await registerWorker(newWorkerId.trim(), newAccountId.trim() || undefined);
-    if (result) {
-      setNewWorkerId("");
+    setError(null);
+    const result = await registerWorker(input, newAccountId.trim() || undefined);
+    if (result.error) {
+      setError(result.error);
+    } else {
+      setWorkerInput("");
       setNewAccountId("");
       refresh();
       onWorkerChanged?.();
@@ -105,27 +110,32 @@ export default function WorkerManagementPanel({ onWorkerChanged }: Props) {
       {/* Register new worker */}
       <div className="space-y-2 p-3 rounded bg-zinc-900/80 border border-zinc-800">
         <p className="text-[9px] text-zinc-600 font-mono">
-          // Register a worker on the smart contract
+          // Paste the worker&apos;s endpoint URL or DID to register on-chain
         </p>
-        <div className="flex gap-2">
+        <div className="space-y-2">
           <input
-            value={newWorkerId}
-            onChange={(e) => setNewWorkerId(e.target.value)}
-            placeholder="worker ID (e.g. worker4)"
-            className="flex-1 text-[10px] bg-zinc-800/60 border border-zinc-700/50 rounded p-1.5
+            value={workerInput}
+            onChange={(e) => { setWorkerInput(e.target.value); setError(null); }}
+            placeholder="Worker URL (https://...phala.network) or DID (did:key:z6Mk...)"
+            className="w-full text-[10px] bg-zinc-800/60 border border-zinc-700/50 rounded p-1.5
                        text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-[#00ff41]/30 font-mono"
           />
           <input
             value={newAccountId}
             onChange={(e) => setNewAccountId(e.target.value)}
             placeholder="NEAR account (optional)"
-            className="flex-1 text-[10px] bg-zinc-800/60 border border-zinc-700/50 rounded p-1.5
+            className="w-full text-[10px] bg-zinc-800/60 border border-zinc-700/50 rounded p-1.5
                        text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-[#00ff41]/30 font-mono"
           />
         </div>
+        {error && (
+          <div className="text-[10px] font-mono text-red-400 bg-red-950/30 border border-red-900/30 rounded p-2 break-words">
+            {error}
+          </div>
+        )}
         <button
           onClick={handleRegister}
-          disabled={!newWorkerId.trim() || submitting}
+          disabled={!workerInput.trim() || submitting}
           className="text-[10px] px-3 py-1.5 rounded bg-[#00ff41]/10 border border-[#00ff41]/30
                      text-[#00ff41] font-mono hover:bg-[#00ff41]/15 disabled:opacity-40
                      disabled:cursor-not-allowed transition-all"

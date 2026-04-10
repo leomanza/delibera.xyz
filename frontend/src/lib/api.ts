@@ -276,14 +276,29 @@ export async function getRegisteredWorkers(): Promise<{ workers: RegisteredWorke
 }
 
 export async function registerWorker(
-  workerId: string,
-  accountId?: string
-): Promise<{ message: string } | null> {
-  return safeFetch(`${getCoordinatorUrl()}/api/coordinate/workers/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ workerId, accountId }),
-  });
+  endpointUrlOrDid: string,
+  accountId?: string,
+): Promise<{ message?: string; error?: string }> {
+  const isDid = endpointUrlOrDid.startsWith("did:");
+  const payload = isDid
+    ? { workerId: endpointUrlOrDid, accountId }
+    : { endpointUrl: endpointUrlOrDid, accountId };
+
+  try {
+    const res = await fetch(`${getCoordinatorUrl()}/api/coordinate/workers/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return { error: data.error || `Registration failed (HTTP ${res.status})` };
+    }
+    return data;
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Network error" };
+  }
 }
 
 export async function removeWorker(workerId: string): Promise<{ message: string } | null> {
