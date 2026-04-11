@@ -2,7 +2,148 @@
 
 A decentralized platform where independent AI agents deliberate and vote on DAO proposals. Individual reasoning stays private off-chain in Ensue shared memory, while only aggregate tallies are settled on the NEAR blockchain. Anyone can deploy their own coordinator or worker agents through the platform — each running autonomously inside Phala TEE containers.
 
-Built with [NEAR Shade Agents](https://docs.near.org/ai/shade-agents/getting-started/introduction), [NEAR AI](https://near.ai/), [Ensue Memory Network](https://ensue.dev), [Storacha](https://storacha.network), [Lit Protocol](https://litprotocol.com/), [Phala TEE](https://phala.network/)
+Built with [NEAR Shade Agents](https://docs.near.org/ai/shade-agents/getting-started/introduction), [NEAR AI](https://near.ai/), [Ensue Memory Network](https://ensue.dev), [Storacha](https://storacha.network), [Lit Protocol](https://litprotocol.com/), [Phala TEE](https://phala.network/), [x402 on Stellar](https://x402.org/), [OpenZeppelin Channels](https://channels.openzeppelin.com/)
+
+## Delibera x402 — Paid Deliberation Oracle on Stellar
+
+> **Stellar Hacks: Agents hackathon entry.** Delibera is now a cross-chain paid deliberation oracle: pay in USDC on **Stellar** via [x402](https://x402.org/), get a real multi-agent governance verdict settled on **NEAR**.
+
+Any external AI agent can now:
+
+1. Pay **$0.01 USDC on Stellar** to submit a governance proposal for deliberation
+2. Three autonomous worker agents (running inside Phala TEEs) deliberate using NEAR AI (DeepSeek-V3.1) with cryptographic verification proofs
+3. The coordinator tallies the votes and settles the decision on the **NEAR blockchain** (via yield/resume)
+4. Pay **$0.002 USDC on Stellar** to retrieve the signed verdict — per-worker reasoning plus the on-chain NEAR proposal id
+
+**Zero API keys. Zero subscriptions. Zero humans in the loop.** Stellar network fees are sponsored by OpenZeppelin Channels, so clients need a USDC balance but **zero XLM**.
+
+### Cross-chain architecture
+
+```
+Buyer (AI agent, any chain)                    Delibera coordinator              NEAR governance
+     │                                                  │                                │
+     │  GET /x402/info (free)                           │                                │
+     ├─────────────────────────────────────────────────>│                                │
+     │  service info + pricing                          │                                │
+     │<─────────────────────────────────────────────────┤                                │
+     │                                                  │                                │
+     │  POST /x402/deliberate                           │                                │
+     ├─────────────────────────────────────────────────>│                                │
+     │  402 Payment Required (Stellar)                  │                                │
+     │<─────────────────────────────────────────────────┤                                │
+     │  retry w/ X-PAYMENT (signed auth entry)          │                                │
+     ├─────────────────────────────────────────────────>│                                │
+     │                                         /verify  │                                │
+     │                              facilitator /settle │                                │
+     │                                  (OZ Channels)   │                                │
+     │  202 Accepted { deliberationId }                 │  triggerLocalCoordination()    │
+     │<─────────────────────────────────────────────────┤──────────────────────────────> │
+     │                                                  │  Workers vote via NEAR AI      │
+     │                                                  │  (Phala TEE + verification)    │
+     │                                                  │  Coordinator tallies           │
+     │                                                  │  contract.resume(tally)        │
+     │                                                  │                                │
+     │  GET /x402/verdict/:id                           │                                │
+     ├─────────────────────────────────────────────────>│                                │
+     │  402 Payment Required ($0.002)                   │                                │
+     │<─────────────────────────────────────────────────┤                                │
+     │  retry w/ X-PAYMENT                              │                                │
+     ├─────────────────────────────────────────────────>│                                │
+     │  200 OK { verdict, stellarPaymentTx, nearProposalId }                             │
+     │<─────────────────────────────────────────────────┤                                │
+```
+
+| Layer | Stack |
+| --- | --- |
+| **Payment** | Stellar testnet (USDC via [x402 v2 protocol](https://x402.org/)) |
+| **Facilitator** | [OpenZeppelin Channels](https://channels.openzeppelin.com/) (zero-XLM fee sponsorship) |
+| **Coordination** | Ensue Memory Network (shared agent state) |
+| **Deliberation** | 3 NEAR AI worker agents (DeepSeek-V3.1 + verification proofs) running in Phala TEEs |
+| **Governance settlement** | NEAR testnet (coordinator contract, yield/resume pattern) |
+| **Encrypted persistence** | Storacha + Lit threshold encryption |
+| **Cold archival** | Filecoin (via Storacha) |
+
+### x402 API Reference
+
+| Endpoint | Price | Description |
+| --- | --- | --- |
+| `GET /x402/info` | **Free** | Service discovery — returns pricing, payment config, and health stats |
+| `POST /x402/deliberate` | **$0.01 USDC** | Submit a governance proposal for multi-agent deliberation. Returns a `deliberationId` synchronously |
+| `GET /x402/verdict/:id` | **$0.002 USDC** | Retrieve the signed verdict once workers have voted. Returns 202 while pending, 200 when complete |
+
+### Quick Start — x402 Demo
+
+Prerequisites: Node.js 22+, two Stellar testnet wallets, browser access to [faucet.circle.com](https://faucet.circle.com/) for testnet USDC.
+
+```bash
+# ── Terminal 1: Delibera coordinator ─────────────────────────
+cd coordinator-agent
+# Fund a Stellar testnet account (server side — receives USDC):
+node -e "const { Keypair } = require('@stellar/stellar-sdk'); const kp = Keypair.random(); console.log('PUB:', kp.publicKey()); console.log('SEC:', kp.secret());"
+curl "https://friendbot.stellar.org?addr=YOUR_SERVER_PUB"
+
+# Append to .env.development.local:
+#   STELLAR_SERVER_ADDRESS=GYOUR_SERVER_PUB
+#   STELLAR_NETWORK=stellar:testnet
+#   X402_FACILITATOR_URL=https://channels.openzeppelin.com/x402/testnet
+#   OZ_API_KEY=$(curl -s https://channels.openzeppelin.com/testnet/gen | jq -r .apiKey)
+#   X402_PRICE_DELIBERATE=$0.01
+#   X402_PRICE_VERDICT=$0.002
+
+npm install
+npm run dev          # x402 gateway + existing coordinator on :3000
+
+# ── Terminal 2: Delibera x402 client (the "buyer") ───────────
+cd x402-client
+cp .env.example .env
+# Put your BUYER secret key in .env as STELLAR_PRIVATE_KEY (different from server)
+#   STELLAR_PRIVATE_KEY=SBUYER…
+
+# Fund the buyer with XLM (for the trustline base reserve):
+curl "https://friendbot.stellar.org?addr=YOUR_BUYER_PUB"
+
+npm install
+
+# Add USDC trustlines to BOTH the buyer and the server wallet:
+npx tsx setup-trustline.ts                                           # buyer
+STELLAR_PRIVATE_KEY=SSERVER... npx tsx setup-trustline.ts            # server
+
+# Get testnet USDC (one-time, browser required):
+#   Open https://faucet.circle.com/, select Stellar testnet, paste the buyer
+#   public key. Wait ~30 seconds for the USDC balance to land.
+
+npm run demo
+```
+
+The demo client prints:
+
+- A free service discovery call
+- A paid deliberation submission (Stellar tx hash)
+- Polling progress while the NEAR workers deliberate
+- The final verdict with per-worker reasoning, cross-chain audit trail, and cost summary
+
+### Files added for x402
+
+```
+coordinator-agent/src/x402/
+├── config.ts            # Stellar env vars + isX402Configured guard
+├── middleware.ts        # @x402/hono payment middleware (exact scheme, Stellar testnet)
+├── x402-modules.d.ts    # Type stubs for @x402 conditional exports
+├── verdict-store.ts     # In-memory map: deliberationId → VerdictRecord
+├── x402-info.ts         # GET /x402/info (free service discovery)
+├── x402-deliberate.ts   # POST /x402/deliberate → triggerLocalCoordination
+├── x402-verdict.ts      # GET /x402/verdict/:id (paid tally retrieval)
+└── x402-router.ts       # Hono sub-app composing the three routes
+
+x402-client/
+├── package.json         # @delibera/x402-client (ESM, type: module)
+├── tsconfig.json        # Bundler resolution for @x402/* subpath exports
+├── client.ts            # Autonomous demo: info → deliberate → poll verdict
+├── setup-trustline.ts   # Helper: add USDC classic asset trustline
+└── .env.example         # STELLAR_PRIVATE_KEY + DELIBERA_SERVER_URL
+```
+
+All changes are **purely additive** — the existing `/api/coordinate/*` endpoints, NEAR contract flow, and worker architecture are untouched. See `doc/plans/stellar-x402-plan.md` for the full implementation plan.
 
 ## How It Works
 

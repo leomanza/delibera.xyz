@@ -8,6 +8,9 @@ import { cors } from 'hono/cors';
 import { startCoordinationLoop, startLocalCoordinationLoop } from './monitor/memory-monitor';
 import coordinateRoute from './routes/coordinate';
 import { getAgentDid } from './storacha/identity';
+import { createX402Middleware } from './x402/middleware';
+import { logX402Config } from './x402/config';
+import x402Router from './x402/x402-router';
 
 const LOCAL_MODE = process.env.LOCAL_MODE === 'true';
 
@@ -46,6 +49,17 @@ app.get('/', (c) => {
 
 // Coordination routes
 app.route('/api/coordinate', coordinateRoute);
+
+// Stellar x402 payment gateway — wraps /x402/* routes with HTTP 402 negotiation.
+// The middleware returns 402 with Stellar payment requirements for unpaid requests
+// and forwards paid requests to the downstream handlers mounted below.
+// Scoped so it never touches /api/coordinate/* or the health endpoint.
+app.use('/x402/*', createX402Middleware());
+
+// x402 routes: GET /x402/info (free), POST /x402/deliberate ($0.01),
+// GET /x402/verdict/:id ($0.002). The middleware above only intercepts
+// the paid routes — /info passes through unchallenged.
+app.route('/x402', x402Router);
 
 /**
  * Initialize ShadeClient, fund, register, and start coordination loop.
@@ -165,6 +179,7 @@ console.log('Coordinator Agent starting on port', port);
 console.log('Mode:', LOCAL_MODE ? 'LOCAL (no TEE/contract)' : 'PRODUCTION');
 console.log('Contract ID:', process.env.AGENT_CONTRACT_ID || process.env.NEXT_PUBLIC_contractId || 'N/A');
 console.log('Ensue API configured:', process.env.ENSUE_API_KEY ? 'YES' : 'NO');
+logX402Config();
 
 serve({ fetch: app.fetch, port }, async (info) => {
   console.log(`\nCoordinator Agent HTTP server running at http://localhost:${info.port}`);

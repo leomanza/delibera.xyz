@@ -21,8 +21,12 @@
     "@near-shade-coordination/shared": "file:../shared",
     "@neardefi/shade-agent-js": "^2.0.0",
     "@onflow/fcl": "^1.21.9",
+    "@stellar/stellar-sdk": "^15.0.1",
     "@storacha/client": "^2.0.7",
     "@storacha/encrypt-upload-client": "^1.1.78",
+    "@x402/core": "^2.9.0",
+    "@x402/hono": "^2.9.0",
+    "@x402/stellar": "^2.9.0",
     "dotenv": "^16.5.0",
     "ethers": "^6.16.0",
     "hono": "^4.8.4",
@@ -35,5 +39,6 @@
     "@types/node": "^20.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.0.0"
-  }
+  },
+  "packageManager": "pnpm@10.8.1+sha512.c50088ba998c67b8ca8c99df8a5e02fd2ae2e2b29aaf238feaa9e124248d3f48f9fb6db2424949ff901cffbb5e0f0cc1ad6aedb602cd29450751d11c35023677"
 }

@@ -58,7 +58,31 @@ interface WorkerRecord {
 }
 
 /**
+ * Probe a worker's endpoint and return true if it responds within the timeout
+ * and reports its workerDid matching the registry entry. This prevents the
+ * coordinator from waiting on stale registry entries (workers that were
+ * previously registered but are no longer running). Errors/timeouts → false.
+ */
+async function probeWorker(worker: WorkerRecord, timeoutMs = 3000): Promise<boolean> {
+  if (!worker.endpoint_url) return false;
+  try {
+    const res = await fetch(`${worker.endpoint_url}/`, {
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) return false;
+    const body = await res.json() as { workerDid?: string };
+    return !body.workerDid || body.workerDid === worker.worker_did;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Query the NEAR registry contract for active workers assigned to this coordinator.
+ * Filters out unreachable workers (stale registrations from previous runs) by
+ * probing each endpoint in parallel — this matches the liveness check in
+ * routes/coordinate.ts#filterValidatedWorkers and prevents waitForWorkers()
+ * from timing out on workers that no longer exist.
  * Falls back to WORKERS env for backward compatibility (LOCAL_MODE without registry).
  */
 async function getActiveWorkers(): Promise<WorkerRecord[]> {
@@ -69,7 +93,21 @@ async function getActiveWorkers(): Promise<WorkerRecord[]> {
       coordinator_did: coordinatorDID,
     });
     if (workers && workers.length > 0) {
-      return workers.filter(w => w.is_active);
+      const activeFlagged = workers.filter(w => w.is_active);
+
+      // Liveness filter: probe each endpoint in parallel and drop dead ones.
+      const probes = await Promise.all(
+        activeFlagged.map(async (w) => ({ worker: w, alive: await probeWorker(w) })),
+      );
+      const reachable = probes.filter(p => p.alive).map(p => p.worker);
+      const dropped = probes.length - reachable.length;
+      if (dropped > 0) {
+        const deadDids = probes.filter(p => !p.alive).map(p => p.worker.worker_did);
+        console.warn(
+          `[discovery] ${dropped} registered worker(s) unreachable, skipping: ${deadDids.join(', ')}`,
+        );
+      }
+      return reachable;
     }
   } catch (err) {
     console.warn('[discovery] Registry query failed, falling back to WORKERS env:', err);
