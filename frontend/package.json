@@ -6,12 +6,18 @@
     "dev": "next dev -p 3004",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "setup-demo-wallet": "tsx scripts/setup-demo-wallet.ts"
   },
   "dependencies": {
     "@hot-labs/near-connect": "^0.9.0",
     "@pingpay/onramp-sdk": "^0.1.4",
     "@pingpay/onramp-types": "^0.0.3",
+    "@stellar/stellar-sdk": "^15.0.1",
+    "@x402/core": "^2.9.0",
+    "@x402/fetch": "^2.9.0",
+    "@x402/stellar": "^2.9.0",
+    "dotenv": "^16.5.0",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3"
@@ -24,6 +30,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   }
 }

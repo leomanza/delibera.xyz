@@ -20,6 +20,7 @@ export default function LandingPage() {
       <WhatIsThis />
       <HowItWorks />
       <WhyItMatters />
+      <AgentPaymentSection />
       <Architecture />
       <TechStack />
       <CTAFooter />
@@ -116,12 +117,21 @@ function Hero() {
           deploy agent &gt;
         </Link>
         <Link
+          href="/x402-demo"
+          className="px-6 py-3 rounded bg-cyan-400/10 border border-cyan-400/30
+                     text-sm font-semibold text-cyan-300 font-mono
+                     shadow-[0_0_20px_rgba(34,211,238,0.1)]
+                     hover:bg-cyan-400/15 hover:shadow-[0_0_30px_rgba(34,211,238,0.2)] transition-all"
+        >
+          live demo: agents paying agents via x402 on Stellar &gt;
+        </Link>
+        <Link
           href="/dashboard"
           className="px-6 py-3 rounded bg-zinc-800 border border-zinc-700
                      text-sm font-semibold text-zinc-300 font-mono
                      hover:bg-zinc-700 hover:border-zinc-600 transition-all"
         >
-          public dashboard
+          dashboard
         </Link>
         <Link
           href="/coordinator"
@@ -130,13 +140,6 @@ function Hero() {
         >
           coordinator
         </Link>
-        <a
-          href="https://docs.delibera.xyz"
-          className="px-6 py-3 rounded border border-zinc-800 text-sm text-zinc-500 font-mono
-                     hover:border-zinc-600 hover:text-zinc-300 transition-all"
-        >
-          explore docs
-        </a>
       </div>
     </section>
   );
@@ -299,6 +302,108 @@ function WhyItMatters() {
             <p className="text-xs text-zinc-500 leading-relaxed">{r.desc}</p>
           </div>
         ))}
+      </div>
+    </section>
+  );
+}
+
+/* ─── Agent Payment Section (x402 + Paid Oracle, hackathon centerpiece) ──── */
+
+function AgentPaymentSection() {
+  const flow = [
+    {
+      n: "01",
+      title: "Ask",
+      detail: "Buyer agent submits a question",
+    },
+    {
+      n: "02",
+      title: "Pay",
+      detail: "$0.01 USDC via x402 + Soroban",
+    },
+    {
+      n: "03",
+      title: "Deliberate",
+      detail: "3 TEE workers vote independently",
+    },
+    {
+      n: "04",
+      title: "Verdict",
+      detail: "Signed on NEAR, returned to buyer",
+    },
+  ];
+
+  return (
+    <section
+      id="x402"
+      className="relative z-10 px-6 md:px-10 py-20 max-w-5xl mx-auto scroll-mt-10"
+    >
+      <SectionHeader tag="// AGENTS ON STELLAR" title="Agents that Pay Other Agents to Think" />
+
+      <div className="animate-fade-in-up delay-100 text-xs text-cyan-300/60 font-mono text-center mb-12">
+        x402 + Stellar USDC + a TEE swarm = the first paid deliberation oracle
+      </div>
+
+      {/* Explainer body — three short paragraphs */}
+      <div className="animate-fade-in-up delay-200 rounded border border-cyan-400/15 bg-[#0a0f0a]/80 p-6 md:p-8 terminal-card mb-10">
+        <p className="text-sm text-zinc-400 leading-relaxed mb-4">
+          HTTP 402 was reserved for <em className="text-zinc-200 not-italic">Payment Required</em> since
+          1999. Stellar finally turned it on. Any HTTP request can now demand a USDC micropayment &mdash;
+          settled in seconds via a Soroban auth entry. No API keys. No subscriptions. No humans.
+        </p>
+        <p className="text-sm text-zinc-400 leading-relaxed mb-4">
+          Most x402 demos sell <span className="text-zinc-200">data</span>. Delibera sells{" "}
+          <span className="text-[#00ff41]">judgment</span>. One agent sends $0.01 USDC and a hard
+          governance question. Three other agents &mdash; running in Phala TEEs with their own
+          persistent memories &mdash; independently deliberate and return a verdict signed on NEAR.
+        </p>
+        <p className="text-sm text-zinc-400 leading-relaxed">
+          Machine-to-machine governance, settled on Stellar. The first agent-to-agent marketplace where
+          the product is <em className="text-zinc-200 not-italic">thinking</em>.
+        </p>
+      </div>
+
+      {/* 4-step flow diagram */}
+      <div className="animate-fade-in-up delay-300 mb-10">
+        <div className="text-xs text-zinc-600 font-mono text-center mb-4">
+          ask() &rarr; pay() &rarr; deliberate() &rarr; verdict()
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          {flow.map((step) => (
+            <div
+              key={step.n}
+              className="relative rounded border border-cyan-400/15 bg-[#0a0f0a]/80 p-5 terminal-card
+                         hover:border-cyan-400/40 transition-all group"
+            >
+              <div className="text-cyan-300/50 font-mono text-xs mb-3 group-hover:text-cyan-300/80 transition-colors">
+                [{step.n}]
+              </div>
+              <h3 className="text-sm font-semibold text-zinc-200 mb-2 font-mono">
+                {step.title}
+              </h3>
+              <p className="text-[11px] text-zinc-500 leading-relaxed font-mono">
+                {step.detail}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* The pseudo-CTA — big button that drops the judge into /x402-demo */}
+      <div className="animate-fade-in-up delay-400 text-center">
+        <Link
+          href="/x402-demo"
+          className="inline-block px-8 py-4 rounded bg-cyan-400/10 border border-cyan-400/40
+                     text-base font-bold text-cyan-300 font-mono
+                     shadow-[0_0_30px_rgba(34,211,238,0.15)]
+                     hover:bg-cyan-400/15 hover:shadow-[0_0_40px_rgba(34,211,238,0.3)]
+                     hover:border-cyan-400/60 transition-all"
+        >
+          &gt; Ask the Paid Oracle &mdash; $0.01 USDC on testnet
+        </Link>
+        <div className="mt-4 text-[10px] text-zinc-600 font-mono">
+          [ no wallet required &middot; demo buyer pays on your behalf &middot; real Stellar testnet tx ]
+        </div>
       </div>
     </section>
   );

@@ -73,7 +73,18 @@ Buyer (AI agent, any chain)                    Delibera coordinator             
 
 ### Quick Start — x402 Demo
 
-Prerequisites: Node.js 22+, two Stellar testnet wallets, browser access to [faucet.circle.com](https://faucet.circle.com/) for testnet USDC.
+Two entry points, same on-chain flow:
+
+- **CLI demo** — terminal-friendly, shows the raw x402 dance step-by-step. Best for developers.
+- **Web demo** (`/x402-demo`) — one-click flow for hackathon judges. A project-funded buyer wallet pays on the visitor's behalf, so **no wallet extension is required**.
+
+Both demos talk to the same `coordinator-agent` x402 gateway and settle USDC on Stellar testnet.
+
+Prerequisites (common): Node.js 22+, a running coordinator with Stellar server wallet + OZ Channels API key. See [`doc/plans/stellar-x402-plan.md`](doc/plans/stellar-x402-plan.md) for the full coordinator env reference.
+
+#### Option A — CLI demo (`x402-client`)
+
+Requires two Stellar testnet wallets (server + buyer) and browser access to [faucet.circle.com](https://faucet.circle.com/) for testnet USDC.
 
 ```bash
 # ── Terminal 1: Delibera coordinator ─────────────────────────
@@ -115,12 +126,40 @@ STELLAR_PRIVATE_KEY=SSERVER... npx tsx setup-trustline.ts            # server
 npm run demo
 ```
 
-The demo client prints:
+The CLI client prints:
 
 - A free service discovery call
 - A paid deliberation submission (Stellar tx hash)
 - Polling progress while the NEAR workers deliberate
 - The final verdict with per-worker reasoning, cross-chain audit trail, and cost summary
+
+#### Option B — Web demo (`frontend/x402-demo`)
+
+One-click, wallet-less demo hosted inside the existing Next.js app. A project-funded demo wallet signs the x402 payment on the visitor's behalf, streaming progress back over SSE. Rate-limited (5/IP/hour, 100/day) to keep the faucet honest.
+
+```bash
+# ── Prereqs: coordinator already running (see Option A terminal 1) ──
+
+cd frontend
+npm install
+
+# One-shot: generate a fresh Stellar testnet keypair, Friendbot-fund it,
+# create a USDC trustline, and append STELLAR_DEMO_BUYER_KEY=... to
+# frontend/.env.local. Prints the Circle faucet URL at the end.
+npm run setup-demo-wallet
+
+# Follow the printed link → faucet.circle.com → Stellar testnet → paste the
+# printed address → "Request 10 USDC" (≈830 demo runs at $0.012/run).
+
+# Point the server-side route at your coordinator (default http://localhost:3000):
+#   DELIBERA_SERVER_URL=http://localhost:3000
+# (Optional — only needed in .env.local if you changed the port.)
+
+npm run dev                      # Next.js on :3004
+# Open http://localhost:3004/x402-demo → click "Run paid deliberation".
+```
+
+The web demo renders a live 4-step stepper (**Discover → Pay → Deliberate → Verdict**), the Stellar Expert tx link for the actual on-chain payment, and the three workers' individual reasoning once the verdict lands. Re-run the demo wallet setup (after deleting the `STELLAR_DEMO_BUYER_KEY` line) to rotate the buyer wallet.
 
 ### Files added for x402
 
@@ -141,6 +180,13 @@ x402-client/
 ├── client.ts            # Autonomous demo: info → deliberate → poll verdict
 ├── setup-trustline.ts   # Helper: add USDC classic asset trustline
 └── .env.example         # STELLAR_PRIVATE_KEY + DELIBERA_SERVER_URL
+
+frontend/
+├── scripts/
+│   └── setup-demo-wallet.ts      # One-shot: Friendbot + USDC trustline + .env.local write
+└── src/app/
+    ├── x402-demo/page.tsx        # "Ask the Oracle" client UI (stepper + SSE reader)
+    └── api/x402-demo/route.ts    # Pattern-C server-side x402 buyer + SSE progress stream
 ```
 
 All changes are **purely additive** — the existing `/api/coordinate/*` endpoints, NEAR contract flow, and worker architecture are untouched. See `doc/plans/stellar-x402-plan.md` for the full implementation plan.
