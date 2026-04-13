@@ -1,0 +1,17 @@
+**/node_modules
+**/dist
+**/.env
+**/.env.*
+**/npm-debug.log
+**/*.log
+.git
+.gitignore
+frontend
+coordinator-agent
+worker-agent-1
+worker-agent-2
+worker-agent-3
+protocol-api
+mcp-storage-server
+doc
+scripts
