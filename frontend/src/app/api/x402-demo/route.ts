@@ -45,7 +45,8 @@ import { x402Client, wrapFetchWithPayment } from '@x402/fetch';
 
 /* ─── Config ───────────────────────────────────────────────────────────── */
 
-const STELLAR_DEMO_BUYER_KEY = process.env.STELLAR_DEMO_BUYER_KEY ?? '';
+const STELLAR_DEMO_BUYER_KEY =
+  process.env.STELLAR_DEMO_BUYER_KEY ?? process.env.STELLAR_PRIVATE_KEY ?? '';
 const DELIBERA_SERVER_URL = (
   process.env.DELIBERA_SERVER_URL ?? 'http://localhost:3000'
 ).replace(/\/+$/, '');
