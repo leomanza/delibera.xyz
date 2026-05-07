@@ -114,16 +114,37 @@ async function ensureRegistered(): Promise<void> {
   }
 
   const workerDID = getWorkerDID();
+  const endpointUrl = process.env.WORKER_ENDPOINT_URL ?? `http://localhost:${process.env.PORT ?? '3001'}`;
+  const cvmId = process.env.PHALA_CVM_ID ?? 'local';
 
   try {
-    const existing = await nearViewCall(REGISTRY_CONTRACT_ID, 'get_worker_by_did', { worker_did: workerDID });
+    const existing = await nearViewCall<{ endpoint_url: string }>(
+      REGISTRY_CONTRACT_ID,
+      'get_worker_by_did',
+      { worker_did: workerDID },
+    );
     if (existing) {
-      console.log(`[worker] Already registered in registry: ${workerDID.substring(0, 24)}...`);
+      // Already registered. If the endpoint moved (e.g. redeploy from
+      // localhost to a public URL), refresh it on-chain — otherwise the
+      // coordinator will keep probing the stale URL and drop this worker.
+      if (existing.endpoint_url !== endpointUrl) {
+        console.log(
+          `[worker] Endpoint changed (${existing.endpoint_url} → ${endpointUrl}), updating registry...`,
+        );
+        const account = await getNearAccount();
+        await account.functionCall({
+          contractId: REGISTRY_CONTRACT_ID,
+          methodName: 'update_worker_endpoint',
+          args: { worker_did: workerDID, endpoint_url: endpointUrl },
+          gas: BigInt(GAS_200T),
+          attachedDeposit: BigInt(0),
+        });
+        console.log(`[worker] ✅ Endpoint updated for ${workerDID.substring(0, 24)}...`);
+      } else {
+        console.log(`[worker] Already registered in registry: ${workerDID.substring(0, 24)}...`);
+      }
       return;
     }
-
-    const endpointUrl = process.env.WORKER_ENDPOINT_URL ?? `http://localhost:${process.env.PORT ?? '3001'}`;
-    const cvmId = process.env.PHALA_CVM_ID ?? 'local';
 
     const account = await getNearAccount();
     await account.functionCall({

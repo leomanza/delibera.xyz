@@ -31,12 +31,14 @@ const app = new Hono();
 
 /**
  * Max time the POST handler will wait for the coordination loop to finish
- * before falling back to the async 202 path. Defaults to 90s — shorter than
- * the coordinator's WORKER_TIMEOUT (120s) so we still have headroom to stream
- * the response before the underlying fetch can time out, but long enough that
- * a typical 3-worker AI deliberation (30–60s) completes inline.
+ * before falling back to the async 202 path. Defaults to 115s — stays under
+ * the frontend x402-demo route's 120s maxDuration cap while leaving room for
+ * 3-worker deliberations that include AI inference (~25s) plus the serial
+ * NEAR tx chain (start_coordination → record_submissions → coordinator_resume
+ * → finalize) plus Storacha/Lit backup, which together can push past 90s
+ * especially when any tx retries on a nonce conflict.
  */
-const AWAIT_TIMEOUT_MS = Number(process.env.X402_DELIBERATE_AWAIT_MS ?? 90_000);
+const AWAIT_TIMEOUT_MS = Number(process.env.X402_DELIBERATE_AWAIT_MS ?? 115_000);
 
 /**
  * Pull the Stellar settlement tx hash (if any) off the x402 response header.
