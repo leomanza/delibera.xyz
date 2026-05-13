@@ -1,0 +1,518 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - link "Skip to main content" [ref=e2] [cursor=pointer]:
+      - /url: "#content-area"
+    - generic:
+      - generic:
+        - generic [ref=e9]:
+          - link "IronClaw home page light logo" [ref=e11] [cursor=pointer]:
+            - /url: /
+            - generic [ref=e12]: IronClaw home page
+            - img "light logo" [ref=e13]
+          - generic [ref=e15]:
+            - generic:
+              - generic:
+                - link:
+                  - /url: /
+            - navigation [ref=e16]:
+              - list [ref=e17]:
+                - listitem [ref=e18]:
+                  - link "Get Support" [ref=e19] [cursor=pointer]:
+                    - /url: https://t.me/ironclawAI
+                - listitem [ref=e20]:
+                  - link "Deploy Now" [ref=e21] [cursor=pointer]:
+                    - /url: https://agent.near.ai/
+                    - generic [ref=e23]: Deploy Now
+        - generic [ref=e24]:
+          - generic [ref=e25]:
+            - generic [ref=e27]:
+              - button "Open search" [ref=e29] [cursor=pointer]:
+                - generic [ref=e30]:
+                  - img [ref=e31]
+                  - generic [ref=e34]: Search...
+                - generic [ref=e35]: ⌘K
+              - generic [ref=e36]:
+                - list [ref=e37]:
+                  - listitem [ref=e38]:
+                    - link "Agent Dashboard" [ref=e39] [cursor=pointer]:
+                      - /url: https://agent.near.ai/
+                      - img [ref=e40]
+                      - generic [ref=e41]: Agent Dashboard
+                  - listitem [ref=e42]:
+                    - link "NEAR AI Cloud" [ref=e43] [cursor=pointer]:
+                      - /url: https://cloud.near.ai
+                      - img [ref=e44]
+                      - generic [ref=e45]: NEAR AI Cloud
+                - generic [ref=e46]:
+                  - generic:
+                    - heading [level=5]
+                  - list [ref=e47]:
+                    - listitem [ref=e48]:
+                      - link "Introduction" [ref=e49] [cursor=pointer]:
+                        - /url: /
+                        - img [ref=e51]
+                        - generic [ref=e54]: Introduction
+                    - listitem [ref=e55]:
+                      - link "Quickstart" [ref=e56] [cursor=pointer]:
+                        - /url: /quickstart
+                        - img [ref=e58]
+                        - generic [ref=e61]: Quickstart
+                    - listitem [ref=e62]:
+                      - link "Onboard" [ref=e63] [cursor=pointer]:
+                        - /url: /onboard
+                        - img [ref=e65]
+                        - generic [ref=e68]: Onboard
+                - generic [ref=e69]:
+                  - generic [ref=e70]:
+                    - img [ref=e71]
+                    - heading "Capabilities" [level=5] [ref=e72]
+                  - list [ref=e73]:
+                    - listitem [ref=e74]:
+                      - link "Overview" [ref=e75] [cursor=pointer]:
+                        - /url: /capabilities/overview
+                        - generic [ref=e78]: Overview
+                    - listitem [ref=e79]:
+                      - link "Inference Providers" [ref=e80] [cursor=pointer]:
+                        - /url: /capabilities/llm-providers
+                        - generic [ref=e83]: Inference Providers
+                    - listitem [ref=e84]:
+                      - button "Toggle Core Capabilities section" [ref=e85] [cursor=pointer]:
+                        - generic [ref=e86]: Core Capabilities
+                        - img [ref=e88]
+                - generic [ref=e90]:
+                  - generic [ref=e91]:
+                    - img [ref=e92]
+                    - heading "Channels" [level=5] [ref=e93]
+                  - list [ref=e94]:
+                    - listitem [ref=e95]:
+                      - link "Overview" [ref=e96] [cursor=pointer]:
+                        - /url: /channels/overview
+                        - generic [ref=e99]: Overview
+                    - listitem [ref=e100]:
+                      - button "Toggle Built-in Channels section" [expanded] [ref=e101] [cursor=pointer]:
+                        - generic [ref=e102]: Built-in Channels
+                        - img [ref=e104]
+                      - list [ref=e106]:
+                        - listitem [ref=e107]:
+                          - link "Setup a Tunnel" [ref=e108] [cursor=pointer]:
+                            - /url: /tunnel
+                            - generic [ref=e111]: Setup a Tunnel
+                        - listitem [ref=e112]:
+                          - link "Local" [ref=e113] [cursor=pointer]:
+                            - /url: /channels/local
+                            - generic [ref=e116]: Local
+                        - listitem [ref=e117]:
+                          - link "Discord" [ref=e118] [cursor=pointer]:
+                            - /url: /channels/discord
+                            - generic [ref=e121]: Discord
+                        - listitem [ref=e122]:
+                          - link "Telegram" [ref=e123] [cursor=pointer]:
+                            - /url: /channels/telegram
+                            - generic [ref=e126]: Telegram
+                        - listitem [ref=e127]:
+                          - link "Webhook" [ref=e128] [cursor=pointer]:
+                            - /url: /channels/webhook
+                            - generic [ref=e131]: Webhook
+                        - listitem [ref=e132]:
+                          - link "Signal" [ref=e133] [cursor=pointer]:
+                            - /url: /channels/signal
+                            - generic [ref=e136]: Signal
+                - generic [ref=e137]:
+                  - generic [ref=e138]:
+                    - img [ref=e139]
+                    - heading "Extensions (Tools)" [level=5] [ref=e140]
+                  - list [ref=e141]:
+                    - listitem [ref=e142]:
+                      - link "Overview" [ref=e143] [cursor=pointer]:
+                        - /url: /extensions/overview
+                        - generic [ref=e146]: Overview
+                    - listitem [ref=e147]:
+                      - button "Toggle Built-in Extensions section" [ref=e148] [cursor=pointer]:
+                        - generic [ref=e149]: Built-in Extensions
+                        - img [ref=e151]
+                - generic [ref=e153]:
+                  - generic [ref=e154]:
+                    - img [ref=e155]
+                    - heading "Tutorials" [level=5] [ref=e156]
+                  - list [ref=e157]:
+                    - listitem [ref=e158]:
+                      - link "How to build a tool" [ref=e159] [cursor=pointer]:
+                        - /url: /extensions/building-a-tool
+                        - generic [ref=e162]: How to build a tool
+                    - listitem [ref=e163]:
+                      - link "How to build a channel" [ref=e164] [cursor=pointer]:
+                        - /url: /channels/building-a-channel
+                        - generic [ref=e167]: How to build a channel
+                    - listitem [ref=e168]:
+                      - button "Toggle How to host IronClaw on... section" [ref=e169] [cursor=pointer]:
+                        - generic [ref=e170]: How to host IronClaw on...
+                        - img [ref=e172]
+            - generic [ref=e176]:
+              - button "US English" [ref=e178] [cursor=pointer]:
+                - img "US" [ref=e180]
+                - generic [ref=e182]: English
+                - img [ref=e183]
+              - button "Toggle dark mode" [ref=e185] [cursor=pointer]:
+                - generic [ref=e186]:
+                  - img [ref=e187]
+                  - img [ref=e194]
+          - generic [ref=e201]:
+            - banner [ref=e202]:
+              - generic [ref=e203]:
+                - generic [ref=e204]: Built-in Channels
+                - generic [ref=e205]:
+                  - heading "HTTP Webhook" [level=1] [ref=e206]
+                  - generic [ref=e207]:
+                    - button "Copy page" [ref=e208] [cursor=pointer]:
+                      - generic [ref=e209]:
+                        - img [ref=e210]
+                        - generic [ref=e213]: Copy page
+                    - button "More actions" [ref=e214] [cursor=pointer]:
+                      - img [ref=e215]
+              - paragraph [ref=e218]: REST API for external integrations
+            - generic [ref=e219]:
+              - blockquote [ref=e220]:
+                - heading "Documentation Index" [level=2] [ref=e221]
+                - paragraph [ref=e222]:
+                  - text: "Fetch the complete documentation index at:"
+                  - link "https://docs.ironclaw.com/llms.txt" [ref=e223] [cursor=pointer]:
+                    - /url: https://docs.ironclaw.com/llms.txt
+                - paragraph [ref=e224]: Use this file to discover all available pages before exploring further.
+              - generic [ref=e225]: The HTTP Webhook channel provides a REST API for integrating external services with IronClaw.
+              - generic [ref=e226]:
+                - img "Note" [ref=e228]
+                - generic [ref=e231]:
+                  - text: If you haven’t set up your agent yet, follow our
+                  - link "Quickstart guide" [ref=e232] [cursor=pointer]:
+                    - /url: ../quickstart
+              - separator [ref=e233]
+              - heading "Navigate to header Enabling Webhooks" [level=2] [ref=e234]:
+                - link "Navigate to header" [ref=e235] [cursor=pointer]:
+                  - /url: "#enabling-webhooks"
+                  - img [ref=e237]
+                - generic [ref=e239] [cursor=pointer]: Enabling Webhooks
+              - generic [ref=e240]:
+                - button "Copy the contents from the code block" [ref=e243] [cursor=pointer]:
+                  - img [ref=e244]
+                - code [ref=e250]:
+                  - generic [ref=e251]: export HTTP_ENABLED=true
+                  - generic [ref=e252]: export HTTP_HOST=0.0.0.0
+                  - generic [ref=e253]: export HTTP_PORT=8080
+                  - generic [ref=e254]: export HTTP_WEBHOOK_SECRET=your-secret
+              - generic [ref=e255]: "Or during onboarding:"
+              - generic [ref=e256]:
+                - button "Copy the contents from the code block" [ref=e259] [cursor=pointer]:
+                  - img [ref=e260]
+                - code [ref=e266]:
+                  - generic [ref=e267]: "Step 6: Channel Configuration"
+                  - generic [ref=e268]: → Select "HTTP Webhook"
+                  - generic [ref=e269]: "→ Port: 8080"
+              - separator [ref=e270]
+              - heading "Navigate to header Security" [level=2] [ref=e271]:
+                - link "Navigate to header" [ref=e272] [cursor=pointer]:
+                  - /url: "#security"
+                  - img [ref=e274]
+                - generic [ref=e276] [cursor=pointer]: Security
+              - generic [ref=e277]:
+                - img "Warning" [ref=e279]
+                - generic [ref=e282]:
+                  - text: The HTTP webhook binds to
+                  - code [ref=e283]: 0.0.0.0:8080
+                  - text: by default. If you don’t need external webhook delivery, set
+                  - code [ref=e284]: HTTP_HOST=127.0.0.1
+                  - text: .
+              - heading "Navigate to header Shared Secret Validation" [level=3] [ref=e285]:
+                - link "Navigate to header" [ref=e286] [cursor=pointer]:
+                  - /url: "#shared-secret-validation"
+                  - img [ref=e288]
+                - generic [ref=e290] [cursor=pointer]: Shared Secret Validation
+              - generic [ref=e291]: "Configure a webhook secret to validate requests:"
+              - generic [ref=e292]:
+                - button "Copy the contents from the code block" [ref=e295] [cursor=pointer]:
+                  - img [ref=e296]
+                - code [ref=e302]:
+                  - generic [ref=e303]: export HTTP_WEBHOOK_SECRET="your-secret-here"
+              - generic [ref=e304]:
+                - text: The secret is sent in the
+                - code [ref=e305]: X-Webhook-Secret
+                - text: header.
+              - heading "Navigate to header Rate Limiting" [level=3] [ref=e306]:
+                - link "Navigate to header" [ref=e307] [cursor=pointer]:
+                  - /url: "#rate-limiting"
+                  - img [ref=e309]
+                - generic [ref=e311] [cursor=pointer]: Rate Limiting
+              - list [ref=e312]:
+                - listitem [ref=e313]:
+                  - strong [ref=e314]: Body size
+                  - text: ": 64 KB maximum"
+                - listitem [ref=e315]:
+                  - strong [ref=e316]: Rate
+                  - text: ": 60 requests per minute per IP"
+              - separator [ref=e317]
+              - heading "Navigate to header Sending Messages" [level=2] [ref=e318]:
+                - link "Navigate to header" [ref=e319] [cursor=pointer]:
+                  - /url: "#sending-messages"
+                  - img [ref=e321]
+                - generic [ref=e323] [cursor=pointer]: Sending Messages
+              - heading "Navigate to header Request Format" [level=3] [ref=e324]:
+                - link "Navigate to header" [ref=e325] [cursor=pointer]:
+                  - /url: "#request-format"
+                  - img [ref=e327]
+                - generic [ref=e329] [cursor=pointer]: Request Format
+              - generic [ref=e330]:
+                - button "Copy the contents from the code block" [ref=e333] [cursor=pointer]:
+                  - img [ref=e334]
+                - code [ref=e340]:
+                  - generic [ref=e341]: curl -X POST http://localhost:8080/webhook \
+                  - generic [ref=e342]: "-H \"Content-Type: application/json\" \\"
+                  - generic [ref=e343]: "-H \"X-Webhook-Secret: your-secret\" \\"
+                  - generic [ref=e344]: "-d '{"
+                  - generic [ref=e345]: "\"user_id\": \"default\","
+                  - generic [ref=e346]: "\"message\": \"Hello, IronClaw!\""
+                  - generic [ref=e347]: "}'"
+              - heading "Navigate to header Response Format" [level=3] [ref=e348]:
+                - link "Navigate to header" [ref=e349] [cursor=pointer]:
+                  - /url: "#response-format"
+                  - img [ref=e351]
+                - generic [ref=e353] [cursor=pointer]: Response Format
+              - generic [ref=e354]:
+                - button "Copy the contents from the code block" [ref=e357] [cursor=pointer]:
+                  - img [ref=e358]
+                - code [ref=e364]:
+                  - generic [ref=e365]: "{"
+                  - generic [ref=e366]: "\"job_id\": \"uuid\","
+                  - generic [ref=e367]: "\"status\": \"queued\""
+                  - generic [ref=e368]: "}"
+              - separator [ref=e369]
+              - heading "Navigate to header Payload Fields" [level=2] [ref=e370]:
+                - link "Navigate to header" [ref=e371] [cursor=pointer]:
+                  - /url: "#payload-fields"
+                  - img [ref=e373]
+                - generic [ref=e375] [cursor=pointer]: Payload Fields
+              - table [ref=e378]:
+                - rowgroup [ref=e379]:
+                  - row "Field Type Required Description" [ref=e380]:
+                    - columnheader "Field" [ref=e381]
+                    - columnheader "Type" [ref=e382]
+                    - columnheader "Required" [ref=e383]
+                    - columnheader "Description" [ref=e384]
+                - rowgroup [ref=e385]:
+                  - row "user_id string Yes User identifier" [ref=e386]:
+                    - cell "user_id" [ref=e387]:
+                      - code [ref=e388]: user_id
+                    - cell "string" [ref=e389]
+                    - cell "Yes" [ref=e390]
+                    - cell "User identifier" [ref=e391]
+                  - row "message string Yes Message content" [ref=e392]:
+                    - cell "message" [ref=e393]:
+                      - code [ref=e394]: message
+                    - cell "string" [ref=e395]
+                    - cell "Yes" [ref=e396]
+                    - cell "Message content" [ref=e397]
+                  - row "conversation_id string No Continue existing conversation" [ref=e398]:
+                    - cell "conversation_id" [ref=e399]:
+                      - code [ref=e400]: conversation_id
+                    - cell "string" [ref=e401]
+                    - cell "No" [ref=e402]
+                    - cell "Continue existing conversation" [ref=e403]
+                  - row "metadata object No Arbitrary metadata" [ref=e404]:
+                    - cell "metadata" [ref=e405]:
+                      - code [ref=e406]: metadata
+                    - cell "object" [ref=e407]
+                    - cell "No" [ref=e408]
+                    - cell "Arbitrary metadata" [ref=e409]
+              - heading "Navigate to header Response Fields" [level=2] [ref=e410]:
+                - link "Navigate to header" [ref=e411] [cursor=pointer]:
+                  - /url: "#response-fields"
+                  - img [ref=e413]
+                - generic [ref=e415] [cursor=pointer]: Response Fields
+              - table [ref=e418]:
+                - rowgroup [ref=e419]:
+                  - row "Field Type Description" [ref=e420]:
+                    - columnheader "Field" [ref=e421]
+                    - columnheader "Type" [ref=e422]
+                    - columnheader "Description" [ref=e423]
+                - rowgroup [ref=e424]:
+                  - row "job_id string Job UUID for status checking" [ref=e425]:
+                    - cell "job_id" [ref=e426]:
+                      - code [ref=e427]: job_id
+                    - cell "string" [ref=e428]
+                    - cell "Job UUID for status checking" [ref=e429]
+                  - row "status string queued, running, completed" [ref=e430]:
+                    - cell "status" [ref=e431]:
+                      - code [ref=e432]: status
+                    - cell "string" [ref=e433]
+                    - cell "queued, running, completed" [ref=e434]:
+                      - code [ref=e435]: queued
+                      - text: ","
+                      - code [ref=e436]: running
+                      - text: ","
+                      - code [ref=e437]: completed
+                  - row "response string Agent response (when complete)" [ref=e438]:
+                    - cell "response" [ref=e439]:
+                      - code [ref=e440]: response
+                    - cell "string" [ref=e441]
+                    - cell "Agent response (when complete)" [ref=e442]
+              - separator [ref=e443]
+              - heading "Navigate to header Checking Status" [level=2] [ref=e444]:
+                - link "Navigate to header" [ref=e445] [cursor=pointer]:
+                  - /url: "#checking-status"
+                  - img [ref=e447]
+                - generic [ref=e449] [cursor=pointer]: Checking Status
+              - generic [ref=e450]:
+                - button "Copy the contents from the code block" [ref=e453] [cursor=pointer]:
+                  - img [ref=e454]
+                - code [ref=e460]:
+                  - generic [ref=e461]: "curl http://localhost:8080/jobs/{job_id} -H \"X-Webhook-Secret: your-secret\""
+              - generic [ref=e462]: "Response:"
+              - generic [ref=e463]:
+                - button "Copy the contents from the code block" [ref=e466] [cursor=pointer]:
+                  - img [ref=e467]
+                - code [ref=e473]:
+                  - generic [ref=e474]: "{"
+                  - generic [ref=e475]: "\"id\": \"uuid\","
+                  - generic [ref=e476]: "\"status\": \"completed\","
+                  - generic [ref=e477]: "\"response\": \"Hello! How can I help?\","
+                  - generic [ref=e478]: "\"created_at\": \"2024-01-15T10:30:00Z\","
+                  - generic [ref=e479]: "\"completed_at\": \"2024-01-15T10:30:05Z\""
+                  - generic [ref=e480]: "}"
+              - separator [ref=e481]
+              - heading "Navigate to header Error Responses" [level=2] [ref=e482]:
+                - link "Navigate to header" [ref=e483] [cursor=pointer]:
+                  - /url: "#error-responses"
+                  - img [ref=e485]
+                - generic [ref=e487] [cursor=pointer]: Error Responses
+              - table [ref=e490]:
+                - rowgroup [ref=e491]:
+                  - row "Status Meaning" [ref=e492]:
+                    - columnheader "Status" [ref=e493]
+                    - columnheader "Meaning" [ref=e494]
+                - rowgroup [ref=e495]:
+                  - row "400 Invalid request body" [ref=e496]:
+                    - cell "400" [ref=e497]:
+                      - code [ref=e498]: "400"
+                    - cell "Invalid request body" [ref=e499]
+                  - row "401 Missing or invalid secret" [ref=e500]:
+                    - cell "401" [ref=e501]:
+                      - code [ref=e502]: "401"
+                    - cell "Missing or invalid secret" [ref=e503]
+                  - row "429 Rate limit exceeded" [ref=e504]:
+                    - cell "429" [ref=e505]:
+                      - code [ref=e506]: "429"
+                    - cell "Rate limit exceeded" [ref=e507]
+                  - row "500 Server error" [ref=e508]:
+                    - cell "500" [ref=e509]:
+                      - code [ref=e510]: "500"
+                    - cell "Server error" [ref=e511]
+              - separator [ref=e512]
+              - heading "Navigate to header Example Integrations" [level=2] [ref=e513]:
+                - link "Navigate to header" [ref=e514] [cursor=pointer]:
+                  - /url: "#example-integrations"
+                  - img [ref=e516]
+                - generic [ref=e518] [cursor=pointer]: Example Integrations
+              - heading "Navigate to header GitHub Webhook" [level=3] [ref=e519]:
+                - link "Navigate to header" [ref=e520] [cursor=pointer]:
+                  - /url: "#github-webhook"
+                  - img [ref=e522]
+                - generic [ref=e524] [cursor=pointer]: GitHub Webhook
+              - generic [ref=e525]: "Configure GitHub to send events to your IronClaw webhook URL:"
+              - generic [ref=e526]:
+                - button "Copy the contents from the code block" [ref=e529] [cursor=pointer]:
+                  - img [ref=e530]
+                - code [ref=e536]:
+                  - generic [ref=e537]: "# GitHub webhook URL"
+                  - generic [ref=e538]: https://your-server:8080/webhook
+                  - generic [ref=e539]: "# Secret: your configured HTTP_WEBHOOK_SECRET"
+              - heading "Navigate to header Zapier" [level=3] [ref=e540]:
+                - link "Navigate to header" [ref=e541] [cursor=pointer]:
+                  - /url: "#zapier"
+                  - img [ref=e543]
+                - generic [ref=e545] [cursor=pointer]: Zapier
+              - generic [ref=e546]: Use Zapier’s Webhook action to send events to IronClaw.
+              - heading "Navigate to header Custom Script" [level=3] [ref=e547]:
+                - link "Navigate to header" [ref=e548] [cursor=pointer]:
+                  - /url: "#custom-script"
+                  - img [ref=e550]
+                - generic [ref=e552] [cursor=pointer]: Custom Script
+              - generic [ref=e553]:
+                - button "Copy the contents from the code block" [ref=e556] [cursor=pointer]:
+                  - img [ref=e557]
+                - code [ref=e563]:
+                  - generic [ref=e564]: import requests
+                  - generic [ref=e565]: response = requests.post(
+                  - generic [ref=e566]: "\"http://localhost:8080/webhook\","
+                  - generic [ref=e567]: "headers={\"X-Webhook-Secret\": \"your-secret\"},"
+                  - generic [ref=e568]: "json={\"user_id\": \"automation\", \"message\": \"Process this data\"}"
+                  - generic [ref=e569]: )
+                  - generic [ref=e570]: print(response.json()["job_id"])
+              - separator [ref=e571]
+              - heading "Navigate to header Troubleshooting" [level=2] [ref=e572]:
+                - link "Navigate to header" [ref=e573] [cursor=pointer]:
+                  - /url: "#troubleshooting"
+                  - img [ref=e575]
+                - generic [ref=e577] [cursor=pointer]: Troubleshooting
+              - generic [ref=e578]:
+                - group [ref=e579]:
+                  - generic "Connection refused" [ref=e580] [cursor=pointer]:
+                    - img [ref=e582]
+                    - img [ref=e584]
+                    - paragraph [ref=e586]: Connection refused
+                - group [ref=e587]:
+                  - generic "401 Unauthorized" [ref=e588] [cursor=pointer]:
+                    - img [ref=e590]
+                    - img [ref=e592]
+                    - paragraph [ref=e594]: 401 Unauthorized
+                - group [ref=e595]:
+                  - generic "429 Too Many Requests" [ref=e596] [cursor=pointer]:
+                    - img [ref=e598]
+                    - img [ref=e600]
+                    - paragraph [ref=e602]: 429 Too Many Requests
+                - group [ref=e603]:
+                  - generic "Messages not processed" [ref=e604] [cursor=pointer]:
+                    - img [ref=e606]
+                    - img [ref=e608]
+                    - paragraph [ref=e610]: Messages not processed
+            - generic [ref=e612]:
+              - paragraph [ref=e613]: Was this page helpful?
+              - generic [ref=e615]:
+                - button "Yes" [ref=e616] [cursor=pointer]:
+                  - img [ref=e617]
+                  - generic [ref=e619]: "Yes"
+                - button "No" [ref=e620] [cursor=pointer]:
+                  - img [ref=e621]
+                  - generic [ref=e623]: "No"
+            - generic [ref=e624]:
+              - link "Telegram Previous" [ref=e625] [cursor=pointer]:
+                - /url: /channels/telegram
+                - generic [ref=e626]:
+                  - generic [ref=e627]: Telegram
+                  - generic [ref=e628]:
+                    - img [ref=e629]
+                    - generic [ref=e631]: Previous
+              - link "Signal Next" [ref=e632] [cursor=pointer]:
+                - /url: /channels/signal
+                - generic [ref=e633]:
+                  - generic [ref=e634]: Signal
+                  - generic [ref=e635]:
+                    - img [ref=e636]
+                    - generic [ref=e638]: Next
+            - contentinfo [ref=e639]:
+              - generic [ref=e640]:
+                - link "x" [ref=e641] [cursor=pointer]:
+                  - /url: https://x.com/near_ai
+                  - generic [ref=e642]: x
+                  - img [ref=e643]
+                - link "github" [ref=e644] [cursor=pointer]:
+                  - /url: https://github.com/nearai
+                  - generic [ref=e645]: github
+                  - img [ref=e646]
+                - link "linkedin" [ref=e647] [cursor=pointer]:
+                  - /url: https://linkedin.com/company/near-ai
+                  - generic [ref=e648]: linkedin
+                  - img [ref=e649]
+              - link "Powered by This documentation is built and hosted on Mintlify, a developer documentation platform" [ref=e652] [cursor=pointer]:
+                - /url: https://www.mintlify.com?utm_campaign=poweredBy&utm_medium=referral&utm_source=nearai
+                - generic [ref=e653]: Powered by
+                - img [ref=e654]
+                - generic [ref=e663]: This documentation is built and hosted on Mintlify, a developer documentation platform
+  - alert [ref=e664]

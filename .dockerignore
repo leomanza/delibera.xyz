@@ -1,11 +1,15 @@
 **/node_modules
 **/dist
+# Allow built dist/ for the Delibera Docker images (docker-compose.yml)
+!shared/dist
+!ensue-mcp-server/dist
 **/.env
 **/.env.*
 **/npm-debug.log
 **/*.log
 .git
 .gitignore
+.references
 frontend
 worker-agent
 worker-agent-1

@@ -1,0 +1,67 @@
+# Docker image for a Delibera IronClaw worker.
+#
+# Each container runs TWO processes:
+#   1. The Ensue MCP server on 127.0.0.1:7800 (loopback — IronClaw allows http for localhost)
+#   2. IronClaw v0.28.1+ on 0.0.0.0:8080 (webhook for the coordinator)
+#
+# The MCP server runs inside the same container because IronClaw v0.28.1 rejects
+# http:// URLs for non-loopback MCP servers — only `localhost`/`127.0.0.1`/`::1`
+# are allowed for plaintext. Cross-container MCP would need TLS.
+#
+# Build (from repo root):
+#   docker build -f docker/Dockerfile.delibera-worker -t delibera-worker .
+
+FROM ubuntu:24.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Base deps. xz-utils + tar for IronClaw binary extraction.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl tmux jq xz-utils python3 sqlite3 gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Node.js 20 (for the bundled Ensue MCP server)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install IronClaw — direct binary download (auto-detects amd64 or arm64)
+ARG IRONCLAW_VERSION=0.28.1
+RUN set -eux; \
+    ARCH=$(uname -m); \
+    case "$ARCH" in \
+        x86_64)  TARGET=x86_64-unknown-linux-gnu ;; \
+        aarch64) TARGET=aarch64-unknown-linux-gnu ;; \
+        *) echo "Unsupported arch: $ARCH" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL "https://github.com/nearai/ironclaw/releases/download/ironclaw-v${IRONCLAW_VERSION}/ironclaw-${TARGET}.tar.gz" \
+        -o /tmp/ironclaw.tar.gz; \
+    tar -xzf /tmp/ironclaw.tar.gz -C /tmp; \
+    install -m 755 /tmp/ironclaw-${TARGET}/ironclaw /usr/local/bin/ironclaw; \
+    rm -rf /tmp/ironclaw*; \
+    ironclaw --version
+
+# Bundle the Ensue MCP server + its shared dep
+# Layout:
+#   /opt/shared/        ← @near-shade-coordination/shared (built)
+#   /opt/mcp/           ← the MCP server (built)
+COPY shared/package.json /opt/shared/package.json
+COPY shared/dist/        /opt/shared/dist/
+COPY ensue-mcp-server/package.json /opt/mcp/package.json
+COPY ensue-mcp-server/dist/        /opt/mcp/dist/
+
+# Install runtime deps for BOTH packages (shared needs axios + @storacha/client,
+# mcp needs @modelcontextprotocol/sdk + zod).
+RUN cd /opt/shared && npm install --omit=dev --omit=optional 2>&1 | tail -3 \
+ && cd /opt/mcp    && npm install --omit=dev --omit=optional 2>&1 | tail -3
+
+# Bundle the Delibera skill source files. Rendered per container at startup.
+COPY coordinator-agent/src/skills/ /opt/delibera-skills/
+
+# Entrypoint script
+COPY docker/entrypoint-worker.sh /usr/local/bin/entrypoint-worker.sh
+RUN chmod +x /usr/local/bin/entrypoint-worker.sh
+
+EXPOSE 8080
+
+ENTRYPOINT ["/usr/local/bin/entrypoint-worker.sh"]

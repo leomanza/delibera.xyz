@@ -19,12 +19,24 @@ vi.mock('fs', async (importOriginal) => {
   return {
     ...actual,
     readFileSync: vi.fn((filePath: string) => {
-      if (String(filePath).includes('SKILL.md')) return '# Delibera Skill\ntest skill content';
-      if (String(filePath).includes('AGENTS.md')) return '# Agent Rules\ntest agents';
-      if (String(filePath).includes('SOUL.md')) return '# Soul\ntest soul';
-      if (String(filePath).includes('IDENTITY.md')) return 'DID: {{WORKER_DID}}\nAccount: {{WORKER_NEAR_ACCOUNT}}\nContract: {{COORDINATOR_CONTRACT}}';
-      if (String(filePath).includes('HEARTBEAT.md')) return 'Org: {{ENSUE_COORDINATOR_ORG}}\nWorker: {{WORKER_DID}}';
+      const p = String(filePath);
+      if (p.includes('SKILL.md')) return '# Delibera Skill\ntest skill content';
+      if (p.includes('AGENTS.md')) return '# Agent Rules\ntest agents';
+      if (p.includes('SOUL.md')) return '# Soul\ntest soul';
+      if (p.includes('IDENTITY.md')) return 'DID: {{WORKER_DID}}\nAccount: {{WORKER_NEAR_ACCOUNT}}\nContract: {{COORDINATOR_CONTRACT}}';
+      if (p.includes('USER.md')) return 'Org: {{ENSUE_COORDINATOR_ORG}}\nWorker: {{WORKER_DID}}\nAccount: {{WORKER_NEAR_ACCOUNT}}';
+      // MCP server bundle files (returned as opaque content — the test doesn't inspect them)
+      if (p.includes('ensue-mcp-server') && (p.endsWith('index.js') || p.endsWith('package.json'))) return '// mock bundle';
+      // Shared lib dist files
+      if (p.includes('/shared/dist/')) return '// mock shared lib';
       return actual.readFileSync(filePath);
+    }),
+    existsSync: vi.fn((filePath: string) => {
+      const p = String(filePath);
+      // Pretend the MCP build exists; suppress shared dist files (so the loop just skips them)
+      if (p.includes('ensue-mcp-server/dist/index.js')) return true;
+      if (p.includes('/shared/dist/')) return false;
+      return actual.existsSync(filePath);
     }),
   };
 });
@@ -48,9 +60,18 @@ const baseConfig: IronClawWorkerConfig = {
   coordinatorContract: 'coordinator.testnet',
 };
 
+// Replace setTimeout globally so the deploy sleeps resolve instantly under test.
+// Restored only at module teardown — using afterEach with restoreAllMocks would
+// also wipe the node-ssh mocks above.
+const setTimeoutSpy = vi.spyOn(global, 'setTimeout').mockImplementation(((fn: () => void) => {
+  fn();
+  return 0 as unknown as NodeJS.Timeout;
+}) as typeof setTimeout);
+
 describe('configureIronClawWorker', () => {
   beforeEach(() => {
     mockExecCommand.mockClear();
+    mockExecCommand.mockResolvedValue({ stdout: '', stderr: '', code: 0 });
     mockDispose.mockClear();
     mockConnect.mockClear();
     mockConnect.mockResolvedValue(undefined);
@@ -90,22 +111,47 @@ describe('configureIronClawWorker', () => {
     expect(identityCall![0]).not.toContain('{{WORKER_NEAR_ACCOUNT}}');
   });
 
-  it('HEARTBEAT.md has placeholders substituted', async () => {
+  it('USER.md has placeholders substituted (v0.28.1)', async () => {
     await configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig);
-    const hbCall = mockExecCommand.mock.calls.find(c => (c[0] as string).includes('HEARTBEAT.md'));
-    expect(hbCall![0]).toContain('coord-org');
-    expect(hbCall![0]).not.toContain('{{ENSUE_COORDINATOR_ORG}}');
+    const userCall = mockExecCommand.mock.calls.find(c => (c[0] as string).includes('USER.md'));
+    expect(userCall![0]).toContain('coord-org');
+    expect(userCall![0]).not.toContain('{{ENSUE_COORDINATOR_ORG}}');
+    expect(userCall![0]).not.toContain('{{WORKER_DID}}');
   });
 
-  it('starts IronClaw in a tmux session', async () => {
+  it('starts IronClaw in a tmux session with --no-onboard flag', async () => {
     await configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig);
     const calls = mockExecCommand.mock.calls.map(c => c[0] as string);
-    expect(calls.some(c => c.includes('tmux') && c.includes('ironclaw run'))).toBe(true);
+    const tmuxCall = calls.find(c => c.includes('tmux') && c.includes('ironclaw run'));
+    expect(tmuxCall).toBeDefined();
+    expect(tmuxCall!).toContain('--no-onboard');
   });
 
   it('disposes SSH connection even on error', async () => {
     mockConnect.mockRejectedValueOnce(new Error('connection refused'));
     await expect(configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig)).rejects.toThrow('connection refused');
     expect(mockDispose).toHaveBeenCalled();
+  });
+
+  it('deploys Ensue MCP server bundle to /opt/ensue-mcp-server', async () => {
+    await configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig);
+    const calls = mockExecCommand.mock.calls.map(c => c[0] as string);
+    expect(calls.some(c => c.includes('/opt/ensue-mcp-server') && c.includes('mkdir'))).toBe(true);
+  });
+
+  it('starts Ensue MCP server in its own tmux session with ENSUE_API_KEY', async () => {
+    await configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig);
+    const calls = mockExecCommand.mock.calls.map(c => c[0] as string);
+    const mcpStartCall = calls.find(c => c.includes('tmux') && c.includes('ensue-mcp'));
+    expect(mcpStartCall).toBeDefined();
+    expect(mcpStartCall!).toContain('ENSUE_API_KEY=');
+    expect(mcpStartCall!).toContain('ensue-key'); // baseConfig.ensueApiKey
+    expect(mcpStartCall!).toContain('PORT=7800');
+  });
+
+  it('registers Ensue MCP server with IronClaw via mcp add', async () => {
+    await configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig);
+    const calls = mockExecCommand.mock.calls.map(c => c[0] as string);
+    expect(calls.some(c => c.includes('ironclaw mcp add ensue'))).toBe(true);
   });
 });

@@ -58,10 +58,23 @@ interface WorkerRecord {
 }
 
 /**
- * Query the NEAR registry contract for active workers assigned to this coordinator.
- * Falls back to WORKERS env for backward compatibility (LOCAL_MODE without registry).
+ * Discover active workers for this coordinator.
+ *
+ * Discovery order:
+ *   1. If LOCAL_MODE=true AND WORKERS env is explicitly set, use WORKERS only
+ *      (skips registry — explicit user intent wins; needed for sandbox/dev where
+ *      the operator may have prod workers registered under their real coordinator DID
+ *      but wants to test against local-only workers).
+ *   2. Otherwise query the NEAR registry contract for workers assigned to this coordinator.
+ *   3. Fall back to WORKERS env (or hardcoded LOCAL_MODE defaults).
  */
 async function getActiveWorkers(): Promise<WorkerRecord[]> {
+  // Sandbox / dev override: explicit WORKERS env in LOCAL_MODE skips registry lookup
+  if (process.env.LOCAL_MODE === 'true' && process.env.WORKERS) {
+    console.log('[discovery] LOCAL_MODE + WORKERS env set — skipping registry, using WORKERS only');
+    return getWorkerRecordsFromEnv();
+  }
+
   try {
     const { localViewRegistry } = await import('../contract/local-contract');
     const coordinatorDID = await getAgentDid();
@@ -83,39 +96,53 @@ async function getActiveWorkers(): Promise<WorkerRecord[]> {
  * Fallback: build WorkerRecord[] from the WORKERS env variable.
  * Used when registry is unavailable or empty.
  */
+/**
+ * Parse the WORKERS env var.
+ *
+ * Supported formats (per entry, comma-separated):
+ *   - "did|url"           → cvm_id = ''   (legacy Phala-style HTTP worker)
+ *   - "did|url|cvm_id"    → cvm_id = the 3rd field (use "ironclaw-*" to route to webhook dispatch)
+ *   - "id:port"           → did=id, url=http://localhost:port, cvm_id=''
+ *
+ * The `cvm_id` field controls dispatch routing in triggerWorkers():
+ *   - cvm_id starts with "ironclaw-" → POST /webhook with HMAC X-Hub-Signature-256
+ *   - anything else                  → POST /api/task/execute (existing TypeScript-worker flow)
+ */
 function getWorkerRecordsFromEnv(): WorkerRecord[] {
   const workersEnv = process.env.WORKERS;
-  const entries: Array<{ id: string; url: string }> = [];
+  const entries: Array<{ id: string; url: string; cvm_id: string }> = [];
 
   if (workersEnv) {
     for (const entry of workersEnv.split(',')) {
       const trimmed = entry.trim();
       if (trimmed.includes('|')) {
-        const [id, ...urlParts] = trimmed.split('|');
-        entries.push({ id, url: urlParts.join('|') });
+        const parts = trimmed.split('|');
+        const [id, url, cvm_id] = parts;
+        entries.push({
+          id: id ?? '',
+          url: url ?? '',
+          cvm_id: cvm_id ?? '',
+        });
       } else {
         const [id, port] = trimmed.split(':');
-        entries.push({ id, url: `http://localhost:${port}` });
+        entries.push({ id, url: `http://localhost:${port}`, cvm_id: '' });
       }
     }
-  } else {
-    // No WORKERS env — return empty. Registry-based discovery is the primary path.
-    // Only in explicit LOCAL_MODE dev does the hardcoded fallback make sense.
-    if (process.env.LOCAL_MODE === 'true') {
-      entries.push(
-        { id: 'worker1', url: 'http://localhost:3001' },
-        { id: 'worker2', url: 'http://localhost:3002' },
-        { id: 'worker3', url: 'http://localhost:3003' },
-      );
-    }
+  } else if (process.env.LOCAL_MODE === 'true') {
+    // No WORKERS env — fallback to hardcoded local TypeScript workers.
+    entries.push(
+      { id: 'worker1', url: 'http://localhost:3001', cvm_id: '' },
+      { id: 'worker2', url: 'http://localhost:3002', cvm_id: '' },
+      { id: 'worker3', url: 'http://localhost:3003', cvm_id: '' },
+    );
   }
 
   return entries.map(e => ({
     account_id: '',
     coordinator_did: '',
-    worker_did: e.id,           // Use worker name as DID fallback
+    worker_did: e.id,
     endpoint_url: e.url,
-    cvm_id: '',
+    cvm_id: e.cvm_id,
     registered_at: 0,
     is_active: true,
   }));
@@ -247,14 +274,22 @@ export async function triggerLocalCoordination(taskConfig: string): Promise<Tall
       const workerResults = await getEnsueClient().readMultiple(resultKeys);
       // Only send worker_id + result_hash on-chain (nullifier).
       // Individual votes stay private in Ensue shared memory.
+      // worker_id is preferred from the JSON, but the Ensue key path (coordination/tasks/{DID}/result)
+      // is the source of truth — IronClaw workers don't include workerId in their JSON.
+      const extractWorkerIdFromKey = (key: string): string => {
+        const m = key.match(/coordination\/tasks\/([^/]+)\/result/);
+        return m ? m[1] : '';
+      };
       const submissions = resultKeys
         .map(key => {
           const resultStr = workerResults[key];
           if (!resultStr) return null;
           try {
             const result = JSON.parse(resultStr);
+            const worker_id = (result.workerId as string) || extractWorkerIdFromKey(key);
+            if (!worker_id) return null;
             return {
-              worker_id: result.workerId as string,
+              worker_id,
               result_hash: crypto.createHash('sha256').update(resultStr).digest('hex'),
             };
           } catch { return null; }
@@ -469,16 +504,23 @@ async function processCoordination(
 
     // Only send worker_id + result_hash on-chain (nullifier).
     // Individual votes stay private in Ensue shared memory.
+    // worker_id is preferred from JSON, falls back to extracting from the Ensue key path.
     const resultKeys = workerDIDs.map(did => getWorkerKeys(did).RESULT);
     const workerResults = await getEnsueClient().readMultiple(resultKeys);
+    const extractWorkerIdFromResultKey = (key: string): string => {
+      const m = key.match(/coordination\/tasks\/([^/]+)\/result/);
+      return m ? m[1] : '';
+    };
     const submissions = resultKeys
       .map(key => {
         const resultStr = workerResults[key];
         if (!resultStr) return null;
         try {
           const result = JSON.parse(resultStr);
+          const worker_id = (result.workerId as string) || extractWorkerIdFromResultKey(key);
+          if (!worker_id) return null;
           return {
-            worker_id: result.workerId as string,
+            worker_id,
             result_hash: crypto.createHash('sha256').update(resultStr).digest('hex'),
           };
         } catch { return null; }
@@ -546,8 +588,9 @@ async function processCoordination(
 }
 
 /**
- * Trigger all workers by writing task config to Ensue
- * In local mode, also call worker HTTP APIs directly
+ * Trigger all workers by writing task config to Ensue.
+ * In local mode, also HTTP-dispatches to TypeScript workers (/api/task/execute).
+ * IronClaw workers (cvm_id starts with "ironclaw-") always dispatch via /webhook.
  */
 async function triggerWorkers(taskConfig: string, workers: WorkerRecord[]): Promise<void> {
   console.log('\nTriggering workers...');
@@ -560,41 +603,89 @@ async function triggerWorkers(taskConfig: string, workers: WorkerRecord[]): Prom
     workers.map(w => getEnsueClient().updateMemory(getWorkerKeys(w.worker_did).STATUS, 'pending'))
   );
 
-  // In local mode, trigger workers via HTTP and track which ones are reachable
+  // Shared set — both LOCAL_MODE and ironclaw blocks add to this
+  const unreachableWorkers: Set<string> = new Set();
+
+  // In local mode, trigger TypeScript workers via HTTP /api/task/execute
   if (LOCAL_MODE) {
     const parsed = (() => { try { return JSON.parse(taskConfig); } catch { return { type: 'random' }; } })();
-    const unreachableWorkers: Set<string> = new Set();
 
     await Promise.all(
-      workers.map(async (w) => {
+      workers
+        .filter(w => !w.cvm_id.startsWith('ironclaw-')) // IronClaw handled below
+        .map(async (w) => {
+          try {
+            const res = await fetch(`${w.endpoint_url}/api/task/execute`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ taskConfig: parsed }),
+              signal: AbortSignal.timeout(5000),
+            });
+            const data = await res.json();
+            console.log(`[LOCAL] Triggered ${w.worker_did} (${w.endpoint_url}):`, data);
+          } catch (error) {
+            console.error(`[LOCAL] Failed to trigger ${w.worker_did} (${w.endpoint_url}) — marking unreachable`);
+            unreachableWorkers.add(w.worker_did);
+            await getEnsueClient().updateMemory(getWorkerKeys(w.worker_did).STATUS, 'idle');
+          }
+        })
+    );
+  }
+
+  // IronClaw workers: dispatch via /webhook (works in LOCAL_MODE and production)
+  const ironclawWorkers = workers.filter(w => w.cvm_id.startsWith('ironclaw-'));
+  if (ironclawWorkers.length > 0) {
+    const parsed = (() => { try { return JSON.parse(taskConfig); } catch { return {}; } })() as Record<string, unknown>;
+    const taskId = (parsed.taskId as string | undefined) ?? crypto.randomUUID();
+    const proposalId = (parsed.parameters as any)?.proposalId ?? String(Date.now());
+    const webhookSecret = process.env.IRONCLAW_WEBHOOK_SECRET ?? '';
+
+    await Promise.all(
+      ironclawWorkers.map(async (w) => {
         try {
-          const res = await fetch(`${w.endpoint_url}/api/task/execute`, {
+          // v0.28.1 auth: HMAC-SHA256 over body in X-Hub-Signature-256 header
+          const body = JSON.stringify({
+            user_id: 'coordinator',
+            content: `deliberate task_id:${taskId} proposal_id:${proposalId}`,
+            metadata: { taskId, proposalId, taskConfig: parsed },
+          });
+          const signature = 'sha256=' + crypto.createHmac('sha256', webhookSecret).update(body).digest('hex');
+
+          const res = await fetch(`${w.endpoint_url}/webhook`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ taskConfig: parsed }),
+            headers: { 'Content-Type': 'application/json', 'X-Hub-Signature-256': signature },
+            body,
             signal: AbortSignal.timeout(5000),
           });
-          const data = await res.json();
-          console.log(`[LOCAL] Triggered ${w.worker_did} (${w.endpoint_url}):`, data);
+          if (res.ok) {
+            const data = await res.json() as { message_id?: string };
+            console.log(`[ironclaw] Dispatched to ${w.worker_did}: message_id=${data.message_id}`);
+          } else {
+            throw new Error(`HTTP ${res.status}`);
+          }
         } catch (error) {
-          console.error(`[LOCAL] Failed to trigger ${w.worker_did} (${w.endpoint_url}) — marking unreachable`);
+          console.error(`[ironclaw] Failed to dispatch to ${w.worker_did} — marking unreachable`);
           unreachableWorkers.add(w.worker_did);
-          // Reset status so coordinator doesn't wait for this worker
           await getEnsueClient().updateMemory(getWorkerKeys(w.worker_did).STATUS, 'idle');
         }
       })
     );
+  }
 
-    // Remove unreachable workers from the active list
-    if (unreachableWorkers.size > 0) {
-      const reachable = workers.filter(w => !unreachableWorkers.has(w.worker_did));
-      console.warn(`[LOCAL] ${unreachableWorkers.size} worker(s) unreachable, continuing with ${reachable.length}`);
-      workers.length = 0;
-      workers.push(...reachable);
-    }
+  // Remove unreachable workers from the active list (applies to both LOCAL and ironclaw failures)
+  if (unreachableWorkers.size > 0) {
+    const reachable = workers.filter(w => !unreachableWorkers.has(w.worker_did));
+    console.warn(`[coordinator] ${unreachableWorkers.size} worker(s) unreachable, continuing with ${reachable.length}`);
+    workers.length = 0;
+    workers.push(...reachable);
   }
 
   console.log(`Workers triggered (${workers.length}), task config written to Ensue`);
+}
+
+/** Exported for unit tests only — thin wrapper around triggerWorkers */
+export async function triggerWorkersForTest(taskConfig: string, workers: WorkerRecord[]): Promise<void> {
+  return triggerWorkers(taskConfig, workers);
 }
 
 /**
@@ -677,19 +768,32 @@ async function aggregateResults(proposalId: number): Promise<TallyResult> {
   const resultKeys = workerDIDs.map(did => getWorkerKeys(did).RESULT);
   const results = await getEnsueClient().readMultiple(resultKeys);
 
-  // Parse worker results
+  // Parse worker results — support two shapes:
+  //   - Legacy (TypeScript worker-agent): { workerId, output: { vote, value, ... } }
+  //   - IronClaw (per SKILL.md):          { option, rationale, timestamp, proposal_id }
+  // Helper to extract a normalized vote string ("Approved" | "Rejected" | undefined).
+  const extractVote = (r: Record<string, unknown>): string | undefined => {
+    const output = r.output as { vote?: string } | undefined;
+    if (output?.vote) return output.vote;
+    if (typeof r.option === 'string') return r.option;
+    return undefined;
+  };
+
   const workerResults: WorkerResult[] = [];
 
   for (const key of resultKeys) {
     const resultStr = results[key];
     if (resultStr) {
       try {
-        const result = JSON.parse(resultStr);
-        workerResults.push(result);
-        if (result.output?.vote) {
-          console.log(`Worker ${result.workerId} vote: ${result.output.vote}`);
+        const result = JSON.parse(resultStr) as Record<string, unknown>;
+        workerResults.push(result as unknown as WorkerResult);
+        const vote = extractVote(result);
+        if (vote) {
+          const workerId = (result.workerId as string) ?? '<ironclaw>';
+          console.log(`Worker ${workerId} vote: ${vote}`);
         } else {
-          console.log(`Worker ${result.workerId} result:`, result.output.value);
+          const output = result.output as { value?: unknown } | undefined;
+          console.log(`Worker ${(result.workerId as string) ?? '<unknown>'} result:`, output?.value);
         }
       } catch (error) {
         console.error(`Failed to parse result for ${key}:`, error);
@@ -698,14 +802,15 @@ async function aggregateResults(proposalId: number): Promise<TallyResult> {
   }
 
   // Tally votes if any worker voted, otherwise sum values (backward compat)
-  const hasVotes = workerResults.some(r => r.output?.vote);
+  const hasVotes = workerResults.some(r => extractVote(r as unknown as Record<string, unknown>));
   let approved = 0;
   let rejected = 0;
 
   if (hasVotes) {
     for (const r of workerResults) {
-      if (r.output?.vote === 'Approved') approved++;
-      else if (r.output?.vote === 'Rejected') rejected++;
+      const vote = extractVote(r as unknown as Record<string, unknown>);
+      if (vote === 'Approved') approved++;
+      else if (vote === 'Rejected') rejected++;
     }
     console.log(`\nVote tally: ${approved} Approved, ${rejected} Rejected`);
   }

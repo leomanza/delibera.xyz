@@ -1,0 +1,27 @@
+# Docker image for the Ensue MCP server (shared across all Delibera workers).
+#
+# Build (from repo root):
+#   docker build -f docker/Dockerfile.delibera-mcp -t delibera-mcp .
+
+FROM node:20-bookworm-slim
+
+WORKDIR /opt/mcp
+
+# Copy the shared package (the MCP server depends on it via file:../shared)
+COPY shared/package.json /opt/shared/package.json
+COPY shared/dist/ /opt/shared/dist/
+
+# Copy MCP server source
+COPY ensue-mcp-server/package.json /opt/mcp/package.json
+COPY ensue-mcp-server/dist/ /opt/mcp/dist/
+
+# Install only prod deps. The workspace dep `@near-shade-coordination/shared`
+# is resolved via the local path (file:../shared).
+RUN npm install --omit=dev --omit=optional 2>&1 | tail -5
+
+EXPOSE 7800
+
+ENV PORT=7800
+ENV HOST=0.0.0.0
+
+CMD ["node", "/opt/mcp/dist/index.js"]
