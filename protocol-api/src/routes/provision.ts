@@ -563,7 +563,8 @@ provision.post('/register', async (c) => {
 
   // Set display name in Ensue (non-blocking, best-effort)
   try {
-    const { createEnsueClient, K } = await import('@near-shade-coordination/shared');
+    const { createEnsueClient } = await import('@delibera-xyz/ensue-client');
+    const { K } = await import('@delibera-xyz/shared');
     const ensue = createEnsueClient();
     await ensue.updateMemory(K(`agent/${job.workerDid}/display_name`), job.displayName);
     console.log(`[provision] Display name set for ${job.workerDid}: "${job.displayName}"`);

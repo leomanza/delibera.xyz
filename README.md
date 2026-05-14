@@ -119,7 +119,7 @@ near-shade-coordination/
 ├── contracts/voting/            # Zama fhEVM blind voting contract (Solidity)
 │   ├── contracts/DeliberaVoting.sol
 │   └── test/DeliberaVoting.ts
-├── shared/                      # Shared library (@near-shade-coordination/shared)
+├── shared/                      # Shared library (@delibera-xyz/shared)
 │   └── src/
 │       ├── ensue-client.ts      # Ensue JSON-RPC 2.0 over SSE client
 │       ├── constants.ts         # Memory key paths

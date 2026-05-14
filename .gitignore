@@ -12,7 +12,10 @@ coordinator-agent/dist/
 coordinator-agent/.next
 worker-agent/node_modules/
 worker-agent/dist/
-ensue-mcp-server/dist
+ensue-client/dist/
+ensue-mcp-server/dist/
+protocol-api/dist/
+
 # Legacy (to be deleted)
 worker-agent-1/node_modules/
 worker-agent-2/node_modules/
@@ -29,6 +32,10 @@ worker-agent-3/dist/
 *.env.*.local
 frontend/.env.local
 sandbox/.env.*
+# M1 — docker/.env holds real keys for the Docker Compose worker stack.
+# Already covered by the bare `.env` rule above; this explicit line guards
+# against future `!docker/...` allow-lists that could silently override.
+docker/.env
 
 # IDE / editor
 .claude/settings.local.json
@@ -43,3 +50,7 @@ sandbox/.env.*
 .references/
 
 doc/plans/
+
+.claude/
+
+.playwright-mcp/

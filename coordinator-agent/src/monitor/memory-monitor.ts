@@ -1,4 +1,4 @@
-import { EnsueClient, createEnsueClient, NameResolver } from '@near-shade-coordination/shared';
+import { EnsueClient, createEnsueClient, NameResolver } from '@delibera-xyz/shared';
 import {
   MEMORY_KEYS,
   getWorkerKeys,
@@ -6,13 +6,13 @@ import {
   getProposalWorkerKeys,
   getCoordinatorSnapshotKey,
   PROPOSAL_INDEX_KEY,
-} from '@near-shade-coordination/shared';
+} from '@delibera-xyz/shared';
 import { getAgentDid } from '../storacha/identity';
 import type {
   CoordinationRequest,
   WorkerResult,
   TallyResult,
-} from '@near-shade-coordination/shared';
+} from '@delibera-xyz/shared';
 import crypto from 'crypto';
 import {
   localStartCoordination,
@@ -113,8 +113,14 @@ function getWorkerRecordsFromEnv(): WorkerRecord[] {
   const entries: Array<{ id: string; url: string; cvm_id: string }> = [];
 
   if (workersEnv) {
-    for (const entry of workersEnv.split(',')) {
-      const trimmed = entry.trim();
+    // Drop empty entries from trailing commas / typos like 'a,,b'. An empty entry
+    // would otherwise produce {id:'', url:'', cvm_id:''} and pollute the active-worker
+    // set with a ghost row whose Ensue keys collide at "coordination/tasks//status".
+    const rawEntries = workersEnv
+      .split(',')
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+    for (const trimmed of rawEntries) {
       if (trimmed.includes('|')) {
         const parts = trimmed.split('|');
         const [id, url, cvm_id] = parts;
@@ -137,15 +143,24 @@ function getWorkerRecordsFromEnv(): WorkerRecord[] {
     );
   }
 
-  return entries.map(e => ({
-    account_id: '',
-    coordinator_did: '',
-    worker_did: e.id,
-    endpoint_url: e.url,
-    cvm_id: e.cvm_id,
-    registered_at: 0,
-    is_active: true,
-  }));
+  // Also drop entries whose id is empty after parsing — a guard against pathologically
+  // malformed entries like '|http://x|cvm' that pass the .length>0 filter above.
+  return entries
+    .filter(e => e.id.length > 0)
+    .map(e => ({
+      account_id: '',
+      coordinator_did: '',
+      worker_did: e.id,
+      endpoint_url: e.url,
+      cvm_id: e.cvm_id,
+      registered_at: 0,
+      is_active: true,
+    }));
+}
+
+/** Exported for unit tests only — thin wrapper around the module-private parser. */
+export function getWorkerRecordsFromEnvForTest(): WorkerRecord[] {
+  return getWorkerRecordsFromEnv();
 }
 
 /**
@@ -271,7 +286,7 @@ export async function triggerLocalCoordination(taskConfig: string): Promise<Tall
       console.log('[LOCAL] Recording worker submissions on-chain...');
 
       const resultKeys = workerDIDs.map(did => getWorkerKeys(did).RESULT);
-      const workerResults = await getEnsueClient().readMultiple(resultKeys);
+      const workerResults = await readResultsWithRetry(resultKeys);
       // Only send worker_id + result_hash on-chain (nullifier).
       // Individual votes stay private in Ensue shared memory.
       // worker_id is preferred from the JSON, but the Ensue key path (coordination/tasks/{DID}/result)
@@ -474,20 +489,31 @@ async function processCoordination(
       proposalId.toString()
     );
 
-    // Discover active workers and snapshot them for this proposal
+    // Discover active workers
     const activeWorkers = await getActiveWorkers();
-    const workerDIDs = activeWorkers.map(w => w.worker_did);
-    // getCoordinatorSnapshotKey imported at top level
-    await getEnsueClient().updateMemory(
-      getCoordinatorSnapshotKey(proposalId),
-      JSON.stringify(workerDIDs)
-    );
 
     // Update coordinator status
     await getEnsueClient().updateMemory(MEMORY_KEYS.COORDINATOR_STATUS, 'monitoring');
 
-    // Trigger all workers by writing task config to Ensue
+    // Trigger all workers — this MUTATES `activeWorkers` to remove unreachable ones,
+    // so workerDIDs MUST be read AFTER this call. Reading before would poll dead workers
+    // until WORKER_TIMEOUT and fail the coordination instead of completing with the
+    // reachable subset.
     await triggerWorkers(request.task_config, activeWorkers);
+
+    const workerDIDs = activeWorkers.map(w => w.worker_did);
+    if (workerDIDs.length === 0) {
+      console.error('[coordinator] No reachable workers — all dispatches failed');
+      await getEnsueClient().updateMemory(MEMORY_KEYS.COORDINATOR_STATUS, 'failed');
+      return;
+    }
+
+    // Snapshot the actual (post-filter) worker set for this proposal so downstream
+    // archival + verification sees the same DIDs that voted.
+    await getEnsueClient().updateMemory(
+      getCoordinatorSnapshotKey(proposalId),
+      JSON.stringify(workerDIDs)
+    );
 
     // Monitor Ensue for worker completions
     const allCompleted = await waitForWorkers(workerDIDs, WORKER_TIMEOUT);
@@ -506,7 +532,7 @@ async function processCoordination(
     // Individual votes stay private in Ensue shared memory.
     // worker_id is preferred from JSON, falls back to extracting from the Ensue key path.
     const resultKeys = workerDIDs.map(did => getWorkerKeys(did).RESULT);
-    const workerResults = await getEnsueClient().readMultiple(resultKeys);
+    const workerResults = await readResultsWithRetry(resultKeys);
     const extractWorkerIdFromResultKey = (key: string): string => {
       const m = key.match(/coordination\/tasks\/([^/]+)\/result/);
       return m ? m[1] : '';
@@ -612,7 +638,7 @@ async function triggerWorkers(taskConfig: string, workers: WorkerRecord[]): Prom
 
     await Promise.all(
       workers
-        .filter(w => !w.cvm_id.startsWith('ironclaw-')) // IronClaw handled below
+        .filter(w => !(w.cvm_id?.startsWith('ironclaw-') ?? false)) // IronClaw handled below; null/undefined cvm_id → not IronClaw
         .map(async (w) => {
           try {
             const res = await fetch(`${w.endpoint_url}/api/task/execute`, {
@@ -633,12 +659,20 @@ async function triggerWorkers(taskConfig: string, workers: WorkerRecord[]): Prom
   }
 
   // IronClaw workers: dispatch via /webhook (works in LOCAL_MODE and production)
-  const ironclawWorkers = workers.filter(w => w.cvm_id.startsWith('ironclaw-'));
+  const ironclawWorkers = workers.filter(w => w.cvm_id?.startsWith('ironclaw-') ?? false);
   if (ironclawWorkers.length > 0) {
     const parsed = (() => { try { return JSON.parse(taskConfig); } catch { return {}; } })() as Record<string, unknown>;
     const taskId = (parsed.taskId as string | undefined) ?? crypto.randomUUID();
     const proposalId = (parsed.parameters as any)?.proposalId ?? String(Date.now());
     const webhookSecret = process.env.IRONCLAW_WEBHOOK_SECRET ?? '';
+    // Refuse to dispatch with an empty HMAC key. An empty secret produces uniformly
+    // bogus signatures (every worker dispatch 401s) or, worse, accepts any request
+    // if the worker side also defaulted to empty. Fail loud, fix the env.
+    if (!webhookSecret) {
+      throw new Error(
+        '[ironclaw] IRONCLAW_WEBHOOK_SECRET is empty but ironclaw workers are configured — refusing to dispatch with empty HMAC key',
+      );
+    }
 
     await Promise.all(
       ironclawWorkers.map(async (w) => {
@@ -686,6 +720,28 @@ async function triggerWorkers(taskConfig: string, workers: WorkerRecord[]): Prom
 /** Exported for unit tests only — thin wrapper around triggerWorkers */
 export async function triggerWorkersForTest(taskConfig: string, workers: WorkerRecord[]): Promise<void> {
   return triggerWorkers(taskConfig, workers);
+}
+
+/**
+ * Read worker `result` keys from Ensue with a small retry loop.
+ *
+ * Belt-and-suspenders against polling races: even though SKILL.md makes workers
+ * write `result` before `status=completed`, Ensue read-replica lag can leave a
+ * brief window where the coordinator reads `null` for a key the worker just
+ * wrote. Retrying 2 extra times at 200ms covers replica catch-up without
+ * meaningfully delaying the happy path (which usually returns all values on the
+ * first read).
+ */
+async function readResultsWithRetry(resultKeys: string[]): Promise<Record<string, string | null>> {
+  const ensue = getEnsueClient();
+  let results = await ensue.readMultiple(resultKeys);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const missing = resultKeys.filter(k => results[k] == null);
+    if (missing.length === 0) return results;
+    await new Promise(r => setTimeout(r, 200));
+    results = await ensue.readMultiple(resultKeys);
+  }
+  return results;
 }
 
 /**
@@ -766,7 +822,7 @@ async function aggregateResults(proposalId: number): Promise<TallyResult> {
   } catch { /* ignore */ }
 
   const resultKeys = workerDIDs.map(did => getWorkerKeys(did).RESULT);
-  const results = await getEnsueClient().readMultiple(resultKeys);
+  const results = await readResultsWithRetry(resultKeys);
 
   // Parse worker results — support two shapes:
   //   - Legacy (TypeScript worker-agent): { workerId, output: { vote, value, ... } }

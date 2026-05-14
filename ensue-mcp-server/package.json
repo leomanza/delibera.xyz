@@ -1,5 +1,5 @@
 {
-  "name": "@near-shade-coordination/ensue-mcp-server",
+  "name": "@delibera-xyz/ensue-mcp-server",
   "version": "0.1.0",
   "description": "MCP server exposing Ensue Memory Network to IronClaw workers",
   "private": true,
@@ -15,8 +15,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@delibera-xyz/ensue-client": "file:../ensue-client",
     "@modelcontextprotocol/sdk": "^1.0.0",
-    "@near-shade-coordination/shared": "file:../shared",
     "zod": "^3.23.0"
   },
   "devDependencies": {

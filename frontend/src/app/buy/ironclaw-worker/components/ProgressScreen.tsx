@@ -17,41 +17,57 @@ const ORDER = STEPS.map((s) => s.status);
 export default function ProgressScreen({
   status,
   displayName,
+  failedAt,
 }: {
   status: IronClawProvisionStatus;
   step: string;
   displayName?: string;
+  /** When set, render in "failure view" — red ✗ on the failed step. */
+  failedAt?: IronClawProvisionStatus;
 }) {
-  const currentIdx = ORDER.indexOf(status);
+  const isFailureView = failedAt !== undefined;
+  const failedIdx = failedAt ? ORDER.indexOf(failedAt) : -1;
+  const currentIdx = isFailureView ? failedIdx : ORDER.indexOf(status);
 
   return (
     <div className="rounded border border-[#00ff41]/10 bg-[#0a0f0a]/80 p-6 terminal-card space-y-4">
       <h2 className="text-sm font-semibold text-zinc-100 font-mono">
-        Deploying{displayName ? ` "${displayName}"` : ""}
-        <span className="animate-pulse">...</span>
+        {isFailureView ? (
+          <>Deployment of {displayName ? `"${displayName}"` : "worker"} failed</>
+        ) : (
+          <>
+            Deploying{displayName ? ` "${displayName}"` : ""}
+            <span className="animate-pulse">...</span>
+          </>
+        )}
       </h2>
 
       <ul className="space-y-2">
         {STEPS.map((s, i) => {
           const isDone = i < currentIdx;
-          const isActive = i === currentIdx;
+          const isFailedStep = isFailureView && i === currentIdx;
+          const isActive = !isFailureView && i === currentIdx;
           return (
             <li key={s.status} className="flex items-center gap-2 text-[11px] font-mono">
               <span
                 className={
-                  isDone
+                  isFailedStep
+                    ? "text-red-400"
+                    : isDone
                     ? "text-[#00ff41]"
                     : isActive
                     ? "text-amber-400"
                     : "text-zinc-700"
                 }
               >
-                {isDone ? "✓" : isActive ? "▶" : "○"}
+                {isFailedStep ? "✗" : isDone ? "✓" : isActive ? "▶" : "○"}
               </span>
               <span
                 className={
-                  isDone
-                    ? "text-zinc-400 line-through"
+                  isFailedStep
+                    ? "text-red-300"
+                    : isDone
+                    ? "text-zinc-400"
                     : isActive
                     ? "text-zinc-200"
                     : "text-zinc-700"
@@ -67,7 +83,7 @@ export default function ProgressScreen({
         })}
       </ul>
 
-      {status === "waiting_for_webhook" && (
+      {status === "waiting_for_webhook" && !isFailureView && (
         <p className="text-[10px] text-zinc-600 font-mono">
           IronClaw initializes after cloud-init completes. Estimated 3–5 minutes.
         </p>

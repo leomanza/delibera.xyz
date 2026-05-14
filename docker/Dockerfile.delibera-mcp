@@ -1,4 +1,8 @@
-# Docker image for the Ensue MCP server (shared across all Delibera workers).
+# Docker image for the standalone Ensue MCP server.
+# (Note: in the Delibera Docker compose, the MCP server is bundled INSIDE each
+# worker container — see Dockerfile.delibera-worker — to bypass IronClaw's
+# HTTPS-required policy for non-loopback MCP URLs. This image is kept for
+# standalone use cases like Claude Desktop or external MCP clients.)
 #
 # Build (from repo root):
 #   docker build -f docker/Dockerfile.delibera-mcp -t delibera-mcp .
@@ -7,16 +11,16 @@ FROM node:20-bookworm-slim
 
 WORKDIR /opt/mcp
 
-# Copy the shared package (the MCP server depends on it via file:../shared)
-COPY shared/package.json /opt/shared/package.json
-COPY shared/dist/ /opt/shared/dist/
+# Copy the ensue-client package (the MCP server depends on it via file:../ensue-client)
+COPY ensue-client/package.json /opt/ensue-client/package.json
+COPY ensue-client/dist/ /opt/ensue-client/dist/
 
 # Copy MCP server source
 COPY ensue-mcp-server/package.json /opt/mcp/package.json
 COPY ensue-mcp-server/dist/ /opt/mcp/dist/
 
-# Install only prod deps. The workspace dep `@near-shade-coordination/shared`
-# is resolved via the local path (file:../shared).
+# Install only prod deps. The workspace dep `@delibera-xyz/ensue-client`
+# is resolved via the local path (file:../ensue-client).
 RUN npm install --omit=dev --omit=optional 2>&1 | tail -5
 
 EXPOSE 7800

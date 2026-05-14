@@ -12,7 +12,7 @@
 #   WORKER_DID                — the worker's unique DID (e.g., did:key:z6Mk...)
 #   ENSUE_API_KEY             — the Ensue API key (shared in sandbox)
 #   HTTP_WEBHOOK_SECRET       — webhook auth secret shared with the coordinator
-#   NEAR_AI_API_KEY           — LLM provider key (NEAR AI)
+#   NEAR_AI_API_KEY           — LLM provider key (NEAR AI; rewritten to NEARAI_API_KEY for IronClaw v0.28.1)
 #
 # Optional:
 #   WORKER_NEAR_ACCOUNT, ENSUE_COORDINATOR_ORG, COORDINATOR_CONTRACT, IRONCLAW_MODEL
@@ -72,7 +72,7 @@ DATABASE_BACKEND=libsql
 LIBSQL_PATH=${IRONCLAW_HOME}/ironclaw.db
 LLM_BACKEND=nearai
 NEARAI_MODEL=${IRONCLAW_MODEL}
-NEAR_AI_API_KEY=${NEAR_AI_API_KEY}
+NEARAI_API_KEY=${NEAR_AI_API_KEY}
 CLI_ENABLED=false
 CLI_MODE=repl
 HTTP_ENABLED=true
@@ -112,21 +112,43 @@ done
 ironclaw mcp add ensue http://127.0.0.1:7800/mcp 2>&1 || \
   echo "[entrypoint] mcp add returned non-zero (likely already registered)"
 
-# Disable TUI + REPL channels at the DB level.
-# IronClaw's DB seeds defaults (cli_mode=tui, cli_enabled=true) on first init,
-# and DB values take priority over env vars. Without overriding here, the TUI
-# tries to attach to stdin and the agent worker pool stalls in headless containers.
-echo "[entrypoint] Disabling TUI/REPL channels (headless container) ..."
+# Set CLI channel to REPL mode (not TUI) — the docker-compose service has
+# tty:true + stdin_open:true, so a pseudo-TTY exists and IronClaw's REPL
+# channel can initialize without rendering a full TUI. The agent loop then
+# reaches the main message-processing block.
+# DB values take priority over env vars, so we set via the CLI here.
+echo "[entrypoint] Setting CLI channel = REPL (headless container with pty) ..."
 ironclaw config set channels.cli_mode repl 2>&1 | head -3
-ironclaw config set channels.cli_enabled false 2>&1 | head -3
+ironclaw config set channels.cli_enabled true 2>&1 | head -3
 
-# Trap so we kill the MCP server on container shutdown
+# Supervisor mode: run IronClaw as a child of THIS shell (not via `exec`) so
+# the cleanup trap fires whether the container is signalled OR IronClaw exits
+# on its own. With `exec ironclaw` the shell would be replaced, discarding the
+# trap, and an IronClaw crash would orphan the MCP child until the container died.
 cleanup() {
-  echo "[entrypoint] shutting down — killing MCP server (pid=$MCP_PID)"
+  local exit_code=$?
+  echo "[entrypoint] shutting down (exit=$exit_code) — killing MCP server (pid=$MCP_PID)"
   kill "$MCP_PID" 2>/dev/null || true
+  # Give MCP a moment to flush logs, then force-kill if still alive.
+  sleep 1
+  kill -9 "$MCP_PID" 2>/dev/null || true
 }
 trap cleanup TERM INT EXIT
 
-# Start IronClaw in the foreground
+# Propagate SIGTERM/SIGINT to IronClaw immediately when the container stops.
+forward_signal() {
+  local sig=$1
+  echo "[entrypoint] received $sig — forwarding to ironclaw (pid=$IRONCLAW_PID)"
+  kill -"$sig" "$IRONCLAW_PID" 2>/dev/null || true
+}
+trap 'forward_signal TERM' TERM
+trap 'forward_signal INT'  INT
+
+# Start IronClaw as a child of this shell so the trap above stays active.
 echo "[entrypoint] Starting IronClaw on 0.0.0.0:8080 ..."
-exec ironclaw run --no-onboard
+ironclaw run --no-onboard &
+IRONCLAW_PID=$!
+wait "$IRONCLAW_PID"
+IRONCLAW_EXIT=$?
+echo "[entrypoint] ironclaw exited with code $IRONCLAW_EXIT"
+exit "$IRONCLAW_EXIT"

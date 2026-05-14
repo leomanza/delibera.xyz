@@ -29,6 +29,11 @@ x-worker-defaults: &worker-defaults
     IRONCLAW_MODEL: ${IRONCLAW_MODEL:-Qwen/Qwen3.5-122B-A10B}
     # Show agent activity (skill match, LLM calls, tool calls)
     RUST_LOG: ${RUST_LOG:-ironclaw=debug,info}
+  # Allocate a pseudo-TTY + stdin so IronClaw's CLI channel can initialize.
+  # Without this, agent.run() stalls in TUI/REPL setup before reaching the main
+  # message loop, even with HTTP channel configured.
+  tty: true
+  stdin_open: true
   networks:
     - delibera-net
 

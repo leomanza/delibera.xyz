@@ -6,11 +6,12 @@
  * into a single JSON snapshot, then calls encryptAndVault().
  */
 
-import { createEnsueClient, EnsueClient, ENSUE_PREFIX } from '@near-shade-coordination/shared';
+import { createEnsueClient, type IMemoryClient } from '@delibera-xyz/ensue-client';
+import { ENSUE_PREFIX } from '@delibera-xyz/shared';
 import { encryptAndVault, isVaultConfigured } from './vault';
 
-let _ensueClient: EnsueClient | null = null;
-function getEnsueClient(): EnsueClient {
+let _ensueClient: IMemoryClient | null = null;
+function getEnsueClient(): IMemoryClient {
   if (!_ensueClient) _ensueClient = createEnsueClient();
   return _ensueClient;
 }

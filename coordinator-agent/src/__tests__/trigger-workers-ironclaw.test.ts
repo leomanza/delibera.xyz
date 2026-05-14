@@ -7,7 +7,7 @@ vi.hoisted(() => {
 });
 
 // Mock the shared Ensue client
-vi.mock('@near-shade-coordination/shared', () => ({
+vi.mock('@delibera-xyz/shared', () => ({
   createEnsueClient: vi.fn(() => ({
     updateMemory: vi.fn().mockResolvedValue(undefined),
     readMemory: vi.fn().mockResolvedValue(null),
@@ -61,7 +61,7 @@ vi.mock('../vrf/jury-selector', () => ({ selectJury: vi.fn(), verifyJurySelectio
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-import { triggerWorkersForTest } from '../monitor/memory-monitor';
+import { triggerWorkersForTest, getWorkerRecordsFromEnvForTest } from '../monitor/memory-monitor';
 
 const ironclawWorker = {
   account_id: 'w.testnet',
@@ -180,5 +180,90 @@ describe('WORKERS env parsing', () => {
     await triggerWorkersForTest('{}', [w]);
     const taskCall = mockFetch.mock.calls.find(c => String(c[0]).includes('/api/task/execute'));
     expect(taskCall).toBeDefined();
+  });
+});
+
+describe('triggerWorkers — security/correctness guards', () => {
+  beforeEach(() => { mockFetch.mockClear(); });
+  afterEach(() => { vi.clearAllMocks(); });
+
+  // Empty IRONCLAW_WEBHOOK_SECRET must fail fast, never sign with an empty HMAC key.
+  it('throws when IRONCLAW_WEBHOOK_SECRET is empty and ironclaw workers are present', async () => {
+    const original = process.env.IRONCLAW_WEBHOOK_SECRET;
+    delete process.env.IRONCLAW_WEBHOOK_SECRET;
+    try {
+      await expect(
+        triggerWorkersForTest('{"type":"vote"}', [{ ...ironclawWorker }]),
+      ).rejects.toThrow(/IRONCLAW_WEBHOOK_SECRET/);
+    } finally {
+      if (original !== undefined) process.env.IRONCLAW_WEBHOOK_SECRET = original;
+    }
+    // No fetch should have been issued — guard fires before the dispatch loop.
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  // cvm_id null/undefined must not crash the dispatch filter.
+  it('does not throw when a worker has cvm_id=null (legacy registry row)', async () => {
+    process.env.IRONCLAW_WEBHOOK_SECRET = 'coord-secret';
+    const malformed = { ...ironclawWorker, cvm_id: null as unknown as string };
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ message_id: 'ok' }) });
+    // Should not throw TypeError on null.startsWith — phalaWorker still dispatches.
+    await expect(
+      triggerWorkersForTest('{"type":"vote"}', [malformed, { ...phalaWorker }]),
+    ).resolves.not.toThrow();
+  });
+
+  it('does not throw when a worker has cvm_id=undefined', async () => {
+    process.env.IRONCLAW_WEBHOOK_SECRET = 'coord-secret';
+    const malformed = { ...ironclawWorker, cvm_id: undefined as unknown as string };
+    mockFetch.mockResolvedValue({ ok: true, json: async () => ({ message_id: 'ok' }) });
+    await expect(
+      triggerWorkersForTest('{"type":"vote"}', [malformed, { ...phalaWorker }]),
+    ).resolves.not.toThrow();
+  });
+
+  // Empty WORKERS entries (trailing comma, blank slot) must not produce ghost workers.
+  it('filters empty WORKERS env entries (trailing comma)', () => {
+    const original = process.env.WORKERS;
+    try {
+      process.env.WORKERS = 'did:key:A|http://a:3001|cvm-a,,did:key:B|http://b:3001|cvm-b,';
+      const records = getWorkerRecordsFromEnvForTest();
+      expect(records.length).toBe(2);
+      expect(records.map(r => r.worker_did)).toEqual(['did:key:A', 'did:key:B']);
+      // No record with empty worker_did.
+      expect(records.every(r => r.worker_did.length > 0)).toBe(true);
+    } finally {
+      if (original !== undefined) process.env.WORKERS = original;
+      else delete process.env.WORKERS;
+    }
+  });
+
+  it('drops malformed entries with empty leading id (e.g. "|http://x|cvm")', () => {
+    const original = process.env.WORKERS;
+    try {
+      process.env.WORKERS = '|http://ghost:3001|ironclaw-ghost,did:key:real|http://real:3001|cvm-real';
+      const records = getWorkerRecordsFromEnvForTest();
+      expect(records.length).toBe(1);
+      expect(records[0].worker_did).toBe('did:key:real');
+    } finally {
+      if (original !== undefined) process.env.WORKERS = original;
+      else delete process.env.WORKERS;
+    }
+  });
+
+  // The passed array MUST be mutated to remove unreachable workers — callers rely on this
+  // to compute workerDIDs for waitForWorkers after dispatch.
+  it('mutates the passed array to remove unreachable IronClaw workers', async () => {
+    process.env.IRONCLAW_WEBHOOK_SECRET = 'coord-secret';
+    const reachable = { ...ironclawWorker, worker_did: 'did:key:reachable' };
+    const unreachable = { ...ironclawWorker, worker_did: 'did:key:unreachable' };
+    const workers = [reachable, unreachable];
+    mockFetch
+      .mockImplementationOnce(async () => ({ ok: true, json: async () => ({ message_id: 'r1' }) }))
+      .mockImplementationOnce(() => Promise.reject(new Error('ECONNREFUSED')));
+    await triggerWorkersForTest('{}', workers);
+    // After dispatch, only the reachable worker must remain — callers iterate this array
+    // to build workerDIDs for waitForWorkers.
+    expect(workers.map(w => w.worker_did)).toEqual(['did:key:reachable']);
   });
 });

@@ -7,6 +7,18 @@ const API_URL =
   "https://protocol-api-production.up.railway.app";
 
 const STORAGE_KEY = "delibera_ironclaw_provision_job_id";
+const DRAFT_KEY = "delibera_ironclaw_provision_draft";
+
+/**
+ * The non-secret form fields preserved across Try-again so a typo doesn't cost
+ * the user a full retype. API tokens (DO + NEAR AI) are NEVER stored — they're
+ * cleared on every reset.
+ */
+export interface ConfigDraft {
+  displayName?: string;
+  coordinatorDid?: string;
+  doRegion?: string;
+}
 
 export type IronClawProvisionStatus =
   | "generating_identity"
@@ -38,6 +50,10 @@ export interface IronClawJobState {
   displayName?: string;
   nearAccount?: string;
   error?: string;
+  /** Last non-failed status before failure — used by ProgressScreen to place the ✗ marker. */
+  attemptedStep?: IronClawProvisionStatus;
+  /** Hash of the register_worker transaction once the user has signed. */
+  registrationTxHash?: string;
 }
 
 const POLL_INTERVAL = 5000;
@@ -45,9 +61,17 @@ const POLL_INTERVAL = 5000;
 export function useIronClawProvisionJob() {
   const [job, setJob] = useState<IronClawJobState | null>(null);
   const [loading, setLoading] = useState(false);
+  // Non-secret form fields preserved across reset/reload so a typo doesn't cost a retype.
+  const [draft, setDraftState] = useState<ConfigDraft>({});
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
+    // Restore draft on mount (survives a reload AND a Try-again click).
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) setDraftState(JSON.parse(raw));
+    } catch { /* ignore malformed draft */ }
+
     const savedId = localStorage.getItem(STORAGE_KEY);
     if (savedId) {
       pollStatus(savedId).then((data) => {
@@ -62,6 +86,16 @@ export function useIronClawProvisionJob() {
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const setDraft = useCallback((patch: ConfigDraft) => {
+    setDraftState((prev) => {
+      const next = { ...prev, ...patch };
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(next));
+      } catch { /* ignore quota errors */ }
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -87,7 +121,20 @@ export function useIronClawProvisionJob() {
     pollingRef.current = setInterval(async () => {
       const data = await pollStatus(jobId);
       if (!data) return;
-      setJob(data);
+      setJob((prev) => {
+        // When server reports failed, freeze the previous progress status as
+        // `attemptedStep` so the Progress screen knows where to put the ✗.
+        // Don't overwrite an existing attemptedStep on subsequent polls.
+        if (
+          data.status === "failed" &&
+          prev &&
+          prev.status !== "failed" &&
+          prev.status !== "complete"
+        ) {
+          return { ...data, attemptedStep: prev.status };
+        }
+        return data;
+      });
       if (
         data.status === "complete" ||
         data.status === "failed" ||
@@ -121,6 +168,13 @@ export function useIronClawProvisionJob() {
         const jobId = data.jobId as string;
         localStorage.setItem(STORAGE_KEY, jobId);
 
+        // Capture non-secret config into the draft so Try-again preserves it.
+        setDraft({
+          displayName: params.displayName,
+          coordinatorDid: params.coordinatorDid,
+          doRegion: params.doRegion,
+        });
+
         setJob({
           jobId,
           status: "generating_identity",
@@ -134,7 +188,13 @@ export function useIronClawProvisionJob() {
         return jobId;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : "Unknown error";
-        setJob({ jobId: "", status: "failed", step: "Failed to start", error: msg });
+        setJob({
+          jobId: "",
+          status: "failed",
+          step: "Failed to start",
+          error: msg,
+          attemptedStep: "generating_identity",
+        });
         return null;
       } finally {
         setLoading(false);
@@ -157,7 +217,15 @@ export function useIronClawProvisionJob() {
         console.error("Registration API error:", err);
       }
       setJob((prev) =>
-        prev ? { ...prev, status: "complete", step: "Worker active" } : prev,
+        prev
+          ? {
+              ...prev,
+              status: "complete",
+              step: "Worker active",
+              // Persist the tx hash so SuccessScreen can link to the explorer.
+              registrationTxHash: txHash ?? prev.registrationTxHash,
+            }
+          : prev,
       );
       localStorage.removeItem(STORAGE_KEY);
     },
@@ -169,7 +237,16 @@ export function useIronClawProvisionJob() {
     pollingRef.current = null;
     setJob(null);
     localStorage.removeItem(STORAGE_KEY);
+    // DO NOT clear the draft. The whole point of Try-again is to retry with the
+    // same non-secret config; only API tokens must be re-entered.
   }, []);
 
-  return { job, loading, startProvision, completeRegistration, reset };
+  /** Full reset including the draft — used by "Deploy another" on the SuccessScreen. */
+  const resetIncludingDraft = useCallback(() => {
+    reset();
+    setDraftState({});
+    try { localStorage.removeItem(DRAFT_KEY); } catch { /* ignore */ }
+  }, [reset]);
+
+  return { job, loading, draft, setDraft, startProvision, completeRegistration, reset, resetIncludingDraft };
 }

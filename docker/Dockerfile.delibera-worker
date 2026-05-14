@@ -41,19 +41,19 @@ RUN set -eux; \
     rm -rf /tmp/ironclaw*; \
     ironclaw --version
 
-# Bundle the Ensue MCP server + its shared dep
+# Bundle the Ensue MCP server + its ensue-client dep
 # Layout:
-#   /opt/shared/        ← @near-shade-coordination/shared (built)
+#   /opt/ensue-client/  ← @delibera-xyz/ensue-client (built) — only axios dep
 #   /opt/mcp/           ← the MCP server (built)
-COPY shared/package.json /opt/shared/package.json
-COPY shared/dist/        /opt/shared/dist/
+COPY ensue-client/package.json /opt/ensue-client/package.json
+COPY ensue-client/dist/        /opt/ensue-client/dist/
 COPY ensue-mcp-server/package.json /opt/mcp/package.json
 COPY ensue-mcp-server/dist/        /opt/mcp/dist/
 
-# Install runtime deps for BOTH packages (shared needs axios + @storacha/client,
-# mcp needs @modelcontextprotocol/sdk + zod).
-RUN cd /opt/shared && npm install --omit=dev --omit=optional 2>&1 | tail -3 \
- && cd /opt/mcp    && npm install --omit=dev --omit=optional 2>&1 | tail -3
+# Install runtime deps for BOTH packages.
+# ensue-client → axios. mcp → @modelcontextprotocol/sdk + zod (+ ensue-client linked via file:..).
+RUN cd /opt/ensue-client && npm install --omit=dev --omit=optional 2>&1 | tail -3 \
+ && cd /opt/mcp          && npm install --omit=dev --omit=optional 2>&1 | tail -3
 
 # Bundle the Delibera skill source files. Rendered per container at startup.
 COPY coordinator-agent/src/skills/ /opt/delibera-skills/

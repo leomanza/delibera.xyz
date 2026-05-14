@@ -44,6 +44,26 @@ vi.mock('fs', async (importOriginal) => {
 import { configureIronClawWorker } from '../ironclaw-ssh-configurator';
 import type { IronClawWorkerConfig } from '../types';
 
+/**
+ * Tests for file uploads. Uploads are emitted as:
+ *   printf '%s' '<base64>' | base64 -d > /path/to/file
+ * This helper extracts and decodes the content so substring assertions still work.
+ */
+function decodeUpload(cmd: string): { content: string; destPath: string } | null {
+  const m = cmd.match(/^printf '%s' '([A-Za-z0-9+/=]+)' \| base64 -d > (\S+)$/);
+  if (!m) return null;
+  return { content: Buffer.from(m[1], 'base64').toString('utf-8'), destPath: m[2] };
+}
+
+/** Find the uploaded file whose destination path ends with the given suffix. */
+function findUpload(suffix: string): { content: string; destPath: string } | undefined {
+  for (const call of mockExecCommand.mock.calls) {
+    const decoded = decodeUpload(call[0] as string);
+    if (decoded && decoded.destPath.endsWith(suffix)) return decoded;
+  }
+  return undefined;
+}
+
 const baseConfig: IronClawWorkerConfig = {
   doApiToken: 'tok', doRegion: 'nyc3', doSize: 's-1vcpu-1gb',
   workerDid: 'did:key:z6MkTest',
@@ -88,35 +108,72 @@ describe('configureIronClawWorker', () => {
     await configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig);
     const calls = mockExecCommand.mock.calls.map(c => c[0] as string);
     const cloudInitIdx = calls.findIndex(c => c.includes('cloud-init status'));
-    const envIdx = calls.findIndex(c => c.includes('NEAR_AI_API_KEY'));
+    const envIdx = calls.findIndex(c => {
+      const u = decodeUpload(c);
+      return u !== null && u.destPath.endsWith('.env');
+    });
     expect(cloudInitIdx).toBeGreaterThanOrEqual(0);
+    expect(envIdx).toBeGreaterThanOrEqual(0);
     expect(cloudInitIdx).toBeLessThan(envIdx);
   });
 
-  it('.env content includes all required vars', async () => {
+  it('.env content uses NEARAI_API_KEY (IronClaw v0.28.1 contract), not NEAR_AI_API_KEY', async () => {
     await configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig);
-    const envCall = mockExecCommand.mock.calls.find(c => (c[0] as string).includes('NEAR_AI_API_KEY'));
-    expect(envCall![0]).toContain('WORKER_DID=did:key:z6MkTest');
-    expect(envCall![0]).toContain('HTTP_WEBHOOK_SECRET=webhook-secret');
-    expect(envCall![0]).toContain('ENSUE_API_KEY=ensue-key');
-    expect(envCall![0]).toContain('HTTP_PORT=8080');
+    const envFile = findUpload('/.env');
+    expect(envFile).toBeDefined();
+    expect(envFile!.content).toContain('NEARAI_API_KEY=ai-key');
+    // The two-word variant must NOT appear — IronClaw silently ignores it.
+    expect(envFile!.content).not.toMatch(/\bNEAR_AI_API_KEY=/);
+    expect(envFile!.content).toContain('WORKER_DID=did:key:z6MkTest');
+    expect(envFile!.content).toContain('HTTP_WEBHOOK_SECRET=webhook-secret');
+    expect(envFile!.content).toContain('ENSUE_API_KEY=ensue-key');
+    expect(envFile!.content).toContain('HTTP_PORT=8080');
   });
 
   it('IDENTITY.md has placeholders substituted', async () => {
     await configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig);
-    const identityCall = mockExecCommand.mock.calls.find(c => (c[0] as string).includes('IDENTITY.md'));
-    expect(identityCall![0]).toContain('did:key:z6MkTest');
-    expect(identityCall![0]).toContain('test.testnet');
-    expect(identityCall![0]).not.toContain('{{WORKER_DID}}');
-    expect(identityCall![0]).not.toContain('{{WORKER_NEAR_ACCOUNT}}');
+    const identity = findUpload('IDENTITY.md');
+    expect(identity).toBeDefined();
+    expect(identity!.content).toContain('did:key:z6MkTest');
+    expect(identity!.content).toContain('test.testnet');
+    expect(identity!.content).not.toContain('{{WORKER_DID}}');
+    expect(identity!.content).not.toContain('{{WORKER_NEAR_ACCOUNT}}');
   });
 
   it('USER.md has placeholders substituted (v0.28.1)', async () => {
     await configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig);
-    const userCall = mockExecCommand.mock.calls.find(c => (c[0] as string).includes('USER.md'));
-    expect(userCall![0]).toContain('coord-org');
-    expect(userCall![0]).not.toContain('{{ENSUE_COORDINATOR_ORG}}');
-    expect(userCall![0]).not.toContain('{{WORKER_DID}}');
+    const user = findUpload('USER.md');
+    expect(user).toBeDefined();
+    expect(user!.content).toContain('coord-org');
+    expect(user!.content).not.toContain('{{ENSUE_COORDINATOR_ORG}}');
+    expect(user!.content).not.toContain('{{WORKER_DID}}');
+  });
+
+  it('uploads files safely when content contains heredoc-tag-like sequences (regression: tag injection)', async () => {
+    // Override readFileSync for this test to return content containing every heredoc tag
+    // historically used by the old `heredoc()` helper. With base64 uploads, these can never
+    // truncate the file no matter what bytes the content contains.
+    const fs = await import('fs');
+    const original = vi.mocked(fs.readFileSync);
+    original.mockImplementation((p: any) => {
+      if (String(p).endsWith('AGENTS.md')) {
+        return 'header\nIDEOF\nmiddle\nSHEOF\nfooter\nENVEOF\nMCPJS\nMCPPKG\nSKILLEOF\nUSEREOF';
+      }
+      return '# placeholder';
+    });
+
+    await configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig);
+
+    const agents = findUpload('AGENTS.md');
+    expect(agents).toBeDefined();
+    // Content roundtrips intact — neither truncation nor injection happened.
+    expect(agents!.content).toBe('header\nIDEOF\nmiddle\nSHEOF\nfooter\nENVEOF\nMCPJS\nMCPPKG\nSKILLEOF\nUSEREOF');
+    // The actual command string must NOT contain a literal heredoc tag line in the shell-visible part.
+    const agentsCmd = mockExecCommand.mock.calls
+      .map(c => c[0] as string)
+      .find(c => c.includes('AGENTS.md') && !c.includes('rm ') && !c.includes('mkdir'));
+    expect(agentsCmd).toBeDefined();
+    expect(agentsCmd!).not.toMatch(/\nIDEOF\n|\nSHEOF\n|\nENVEOF\n/);
   });
 
   it('starts IronClaw in a tmux session with --no-onboard flag', async () => {
@@ -153,5 +210,23 @@ describe('configureIronClawWorker', () => {
     await configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig);
     const calls = mockExecCommand.mock.calls.map(c => c[0] as string);
     expect(calls.some(c => c.includes('ironclaw mcp add ensue'))).toBe(true);
+  });
+
+  // execCommand returning non-zero must NOT be silently ignored. node-ssh's execCommand
+  // resolves with {code} even on failure, so the configurator must wrap it and throw —
+  // otherwise full-disk / network-down failures produce zombie droplets.
+  it('throws when an execCommand returns non-zero exit code', async () => {
+    // First exec call is `cloud-init status --wait` — make it fail.
+    mockExecCommand.mockResolvedValueOnce({ stdout: '', stderr: 'cloud-init: error', code: 1 });
+    await expect(
+      configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig),
+    ).rejects.toThrow(/code 1|cloud-init/i);
+  });
+
+  it('includes the command label and stderr snippet in the thrown error', async () => {
+    mockExecCommand.mockResolvedValueOnce({ stdout: '', stderr: 'disk full', code: 28 });
+    await expect(
+      configureIronClawWorker('1.2.3.4', 'privkey-pem', baseConfig),
+    ).rejects.toThrow(/disk full|code 28/);
   });
 });

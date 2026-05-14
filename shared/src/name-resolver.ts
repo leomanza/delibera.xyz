@@ -8,14 +8,18 @@
  * Fallback: truncated DID (e.g. "z6MkuLv3...qYv").
  */
 
-import { createEnsueClient, type EnsueClient } from './ensue-client';
+import { createEnsueClient, type IMemoryClient } from './ensue-client';
 import { K } from './constants';
 
 export class NameResolver {
   private cache: Map<string, string> = new Map();
-  private ensue: EnsueClient;
+  private ensue: IMemoryClient;
 
-  constructor(ensue?: EnsueClient) {
+  /**
+   * @param ensue - Any IMemoryClient implementation. Defaults to a new EnsueClient
+   *                reading ENSUE_API_KEY from process.env (via createEnsueClient).
+   */
+  constructor(ensue?: IMemoryClient) {
     this.ensue = ensue ?? createEnsueClient();
   }
 

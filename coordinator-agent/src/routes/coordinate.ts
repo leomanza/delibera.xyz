@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { EnsueClient, createEnsueClient, NameResolver } from '@near-shade-coordination/shared';
+import { EnsueClient, createEnsueClient, NameResolver } from '@delibera-xyz/shared';
 import {
   MEMORY_KEYS,
   getWorkerKeys,
@@ -9,7 +9,7 @@ import {
   getCoordinatorSnapshotKey,
   PROPOSAL_INDEX_KEY,
   ENSUE_PREFIX,
-} from '@near-shade-coordination/shared';
+} from '@delibera-xyz/shared';
 import { getAgentDid } from '../storacha/identity';
 import { triggerLocalCoordination } from '../monitor/memory-monitor';
 import { selectJury, verifyJurySelection } from '../vrf/jury-selector';

@@ -1,8 +1,10 @@
 **/node_modules
 **/dist
 # Allow built dist/ for the Delibera Docker images (docker-compose.yml)
-!shared/dist
+!ensue-client/dist
 !ensue-mcp-server/dist
+# Legacy — still allowed in case other Docker builds need shared/dist
+!shared/dist
 **/.env
 **/.env.*
 **/npm-debug.log

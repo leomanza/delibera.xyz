@@ -1,6 +1,6 @@
-import { EnsueClient, createEnsueClient, MEMORY_KEYS, K } from '@near-shade-coordination/shared';
-import { TaskStatus, getWorkerKeys } from '@near-shade-coordination/shared';
-import type { TaskConfig, WorkerResult, WorkerStatusInfo, VerificationProof } from '@near-shade-coordination/shared';
+import { EnsueClient, createEnsueClient, MEMORY_KEYS, K } from '@delibera-xyz/shared';
+import { TaskStatus, getWorkerKeys } from '@delibera-xyz/shared';
+import type { TaskConfig, WorkerResult, WorkerStatusInfo, VerificationProof } from '@delibera-xyz/shared';
 import { aiVote } from './ai-voter';
 import type { AiVoteResult } from './ai-voter';
 import {

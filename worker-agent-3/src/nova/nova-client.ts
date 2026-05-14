@@ -1,5 +1,5 @@
 import { NovaSdk, NovaError } from 'nova-sdk-js';
-import { sleep, jitter } from '@near-shade-coordination/shared';
+import { sleep, jitter } from '@delibera-xyz/shared';
 import * as crypto from 'crypto';
 
 const WORKER_ID = process.env.WORKER_ID || 'worker1';

@@ -26,18 +26,24 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import * as http from 'http';
 import { randomUUID } from 'crypto';
-import { createEnsueClient, EnsueClient } from '@near-shade-coordination/shared';
+import { createEnsueClient, type IMemoryClient } from '@delibera-xyz/ensue-client';
+import { SessionStore } from './session-store';
 
 const PORT = parseInt(process.env.PORT ?? '7800', 10);
 const HOST = process.env.HOST ?? '127.0.0.1';
+// Bound resources to prevent leaks from reconnect storms / dead clients.
+// Defaults: 50 concurrent sessions, 30min idle TTL. Override via env.
+const MAX_SESSIONS = parseInt(process.env.MCP_MAX_SESSIONS ?? '50', 10);
+const SESSION_IDLE_MS = parseInt(process.env.MCP_SESSION_IDLE_MS ?? `${30 * 60_000}`, 10);
+const SWEEP_INTERVAL_MS = parseInt(process.env.MCP_SWEEP_INTERVAL_MS ?? '60000', 10);
 
 if (!process.env.ENSUE_API_KEY) {
   console.error('ENSUE_API_KEY env var is required');
   process.exit(1);
 }
 
-// One shared EnsueClient — it's stateless beyond the API key.
-const ensue: EnsueClient = createEnsueClient();
+// One shared EnsueClient — typed as IMemoryClient (the port interface).
+const ensue: IMemoryClient = createEnsueClient();
 
 // ── Tool definitions ──
 
@@ -200,8 +206,15 @@ function buildServer(): Server {
 // Streamable HTTP transport requires per-session state. We hold a transport
 // per session ID (returned to the client via `mcp-session-id` header on first
 // initialize). Subsequent requests must include that header.
+//
+// Sessions are bound by `MAX_SESSIONS` and idle-swept after `SESSION_IDLE_MS` —
+// without this, dropped clients accumulate Server + Transport instances forever
+// because the SDK's `onclose` only fires on graceful disconnect.
 
-const transports: Map<string, StreamableHTTPServerTransport> = new Map();
+const sessionStore = new SessionStore<StreamableHTTPServerTransport, Server>({
+  maxSessions: MAX_SESSIONS,
+  idleTtlMs: SESSION_IDLE_MS,
+});
 
 async function readBody(req: http.IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -231,10 +244,12 @@ async function main(): Promise<void> {
       const sessionId = (req.headers['mcp-session-id'] as string | undefined) ?? undefined;
       const body = await readBody(req);
 
-      let transport = sessionId ? transports.get(sessionId) : undefined;
+      // touch() updates last-activity so the session won't be swept while in use.
+      const existingEntry = sessionId ? sessionStore.touch(sessionId) : undefined;
+      let transport = existingEntry?.transport;
 
       if (!transport) {
-        // No active session — only allow initialize requests to create one
+        // No active session — only allow initialize requests to create one.
         if (!isInitializeRequest(body)) {
           res.writeHead(400, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({
@@ -245,22 +260,44 @@ async function main(): Promise<void> {
           return;
         }
 
+        // Refuse new sessions over MAX_SESSIONS so a reconnect storm or buggy
+        // client can't exhaust memory. Existing clients keep working.
+        if (sessionStore.isAtCapacity()) {
+          console.warn(`[ensue-mcp] rejecting new session — at capacity (${sessionStore.size()}/${MAX_SESSIONS})`);
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({
+            jsonrpc: '2.0',
+            error: { code: -32000, message: 'Server at capacity — too many active sessions' },
+            id: null,
+          }));
+          return;
+        }
+
+        // eslint-disable-next-line prefer-const
+        let createdServer: Server;
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => randomUUID(),
           onsessioninitialized: (id: string) => {
-            transports.set(id, transport!);
-            console.log(`[ensue-mcp] session initialized: ${id}`);
+            const registered = sessionStore.register(id, transport!, createdServer);
+            if (!registered) {
+              // Lost the capacity race between request handler check and init callback.
+              // Close the transport immediately so the client gets a clean disconnect.
+              console.warn(`[ensue-mcp] capacity race on init for ${id} — closing`);
+              try { transport!.close?.(); } catch { /* swallow */ }
+              return;
+            }
+            console.log(`[ensue-mcp] session initialized: ${id} (active: ${sessionStore.size()}/${MAX_SESSIONS})`);
           },
         });
         transport.onclose = () => {
           if (transport!.sessionId) {
-            transports.delete(transport!.sessionId);
-            console.log(`[ensue-mcp] session closed: ${transport!.sessionId}`);
+            sessionStore.remove(transport!.sessionId);
+            console.log(`[ensue-mcp] session closed: ${transport!.sessionId} (active: ${sessionStore.size()})`);
           }
         };
 
-        const server = buildServer();
-        await server.connect(transport);
+        createdServer = buildServer();
+        await createdServer.connect(transport);
       }
 
       await transport.handleRequest(req, res, body);
@@ -281,11 +318,23 @@ async function main(): Promise<void> {
   httpServer.listen(PORT, HOST, () => {
     console.log(`[ensue-mcp] listening on http://${HOST}:${PORT}/mcp`);
     console.log(`[ensue-mcp] tools: ${TOOLS.map((t) => t.name).join(', ')}`);
+    console.log(`[ensue-mcp] sessions: max=${MAX_SESSIONS}, idle TTL=${SESSION_IDLE_MS}ms, sweep every ${SWEEP_INTERVAL_MS}ms`);
   });
+
+  // Periodic idle-sweep. unref() so the timer doesn't keep the process alive
+  // past a graceful shutdown signal.
+  const sweepHandle = setInterval(() => {
+    const swept = sessionStore.sweep();
+    if (swept.length > 0) {
+      console.log(`[ensue-mcp] swept ${swept.length} idle session(s): ${swept.join(', ')}`);
+    }
+  }, SWEEP_INTERVAL_MS);
+  sweepHandle.unref();
 
   // Graceful shutdown
   const shutdown = (signal: string) => {
     console.log(`[ensue-mcp] received ${signal}, shutting down`);
+    clearInterval(sweepHandle);
     httpServer.close(() => process.exit(0));
     // Force exit after 5s if close hangs
     setTimeout(() => process.exit(1), 5000).unref();

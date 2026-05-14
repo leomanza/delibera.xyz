@@ -1,6 +1,6 @@
 import { OpenAI } from 'openai';
 import type { ChatCompletionCreateParamsNonStreaming } from 'openai/resources/chat/completions';
-import type { VoteResult, VerificationProof, ModelAttestation } from '@near-shade-coordination/shared';
+import type { VoteResult, VerificationProof, ModelAttestation } from '@delibera-xyz/shared';
 import { randomBytes } from 'crypto';
 
 /**
