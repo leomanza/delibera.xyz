@@ -10,7 +10,6 @@ const REGISTRY_CONTRACT_ID =
   "registry.agents-coordinator.testnet";
 
 export interface RegisterWorkerParams {
-  coordinatorDid: string;
   workerDid: string;
   endpointUrl: string;
   cvmId: string;
@@ -19,6 +18,8 @@ export interface RegisterWorkerParams {
 /**
  * Build the register_worker function call action for wallet signing.
  * Returns the transaction params that can be passed to near-connect.
+ *
+ * Workers are first-class in the registry — no coordinator_did argument.
  */
 export function buildRegisterWorkerAction(params: RegisterWorkerParams) {
   return {
@@ -29,7 +30,6 @@ export function buildRegisterWorkerAction(params: RegisterWorkerParams) {
         params: {
           methodName: "register_worker",
           args: {
-            coordinator_did: params.coordinatorDid,
             worker_did: params.workerDid,
             endpoint_url: params.endpointUrl,
             cvm_id: params.cvmId,

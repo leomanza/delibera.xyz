@@ -68,7 +68,6 @@ export default function IronClawBuyPage() {
             params: {
               methodName: "register_worker",
               args: {
-                coordinator_did: job.coordinatorDid,
                 worker_did: job.workerDid,
                 endpoint_url: job.phalaEndpoint,
                 cvm_id: job.cvmId,
@@ -234,7 +233,6 @@ export default function IronClawBuyPage() {
                 <pre className="text-zinc-500 overflow-x-auto whitespace-pre-wrap break-all bg-zinc-950/60 border border-zinc-900 rounded p-2">
 {JSON.stringify(
   {
-    coordinator_did: job.coordinatorDid,
     worker_did: job.workerDid,
     endpoint_url: job.phalaEndpoint,
     cvm_id: job.cvmId,

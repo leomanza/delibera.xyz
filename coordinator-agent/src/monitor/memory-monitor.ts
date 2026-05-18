@@ -49,7 +49,6 @@ const WORKER_TIMEOUT = 120000;
 
 interface WorkerRecord {
   account_id: string;
-  coordinator_did: string;
   worker_did: string;
   endpoint_url: string;
   cvm_id: string;
@@ -58,14 +57,17 @@ interface WorkerRecord {
 }
 
 /**
- * Discover active workers for this coordinator.
+ * Discover active workers.
+ *
+ * Workers are first-class entities in the registry — there's no coordinator
+ * pairing. We list ALL active workers and (in the future) filter client-side
+ * by capability/tag/out-of-band agreement. For now, no filter — all active
+ * workers are considered.
  *
  * Discovery order:
  *   1. If LOCAL_MODE=true AND WORKERS env is explicitly set, use WORKERS only
- *      (skips registry — explicit user intent wins; needed for sandbox/dev where
- *      the operator may have prod workers registered under their real coordinator DID
- *      but wants to test against local-only workers).
- *   2. Otherwise query the NEAR registry contract for workers assigned to this coordinator.
+ *      (sandbox/dev override; explicit user intent wins).
+ *   2. Otherwise query the NEAR registry contract via `list_active_workers()`.
  *   3. Fall back to WORKERS env (or hardcoded LOCAL_MODE defaults).
  */
 async function getActiveWorkers(): Promise<WorkerRecord[]> {
@@ -77,10 +79,9 @@ async function getActiveWorkers(): Promise<WorkerRecord[]> {
 
   try {
     const { localViewRegistry } = await import('../contract/local-contract');
-    const coordinatorDID = await getAgentDid();
-    const workers = await localViewRegistry<WorkerRecord[]>('get_workers_for_coordinator', {
-      coordinator_did: coordinatorDID,
-    });
+    // TODO: when capability tags ship, filter `workers` by `capabilities ⊇ requiredCapabilities`
+    // or by per-worker out-of-band agreement. For now, every active worker is a candidate.
+    const workers = await localViewRegistry<WorkerRecord[]>('list_active_workers', {});
     if (workers && workers.length > 0) {
       return workers.filter(w => w.is_active);
     }
@@ -149,7 +150,6 @@ function getWorkerRecordsFromEnv(): WorkerRecord[] {
     .filter(e => e.id.length > 0)
     .map(e => ({
       account_id: '',
-      coordinator_did: '',
       worker_did: e.id,
       endpoint_url: e.url,
       cvm_id: e.cvm_id,

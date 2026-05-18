@@ -368,23 +368,23 @@ export async function localRegisterCoordinator(
 
 /**
  * Register a worker in the registry contract (idempotent).
- * Returns true if already registered or registration succeeds.
+ *
+ * Workers are first-class entities in the registry — no `coordinator_did` argument.
+ * Coordinator discovery happens client-side via `list_active_workers()` + filter.
  */
 export async function localRegisterWorkerInRegistry(
-  coordinatorDid: string,
   workerDid: string,
   endpointUrl: string,
   cvmId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await localCallRegistry('register_worker', {
-      coordinator_did: coordinatorDid,
       worker_did: workerDid,
       endpoint_url: endpointUrl,
       cvm_id: cvmId,
     }, DEPOSIT_0_1_NEAR);
 
-    console.log(`[REGISTRY] Worker registered: ${workerDid} → coordinator ${coordinatorDid}`);
+    console.log(`[REGISTRY] Worker registered: ${workerDid}`);
     return { success: true };
   } catch (error: any) {
     const msg = (error.message || '').substring(0, 500);

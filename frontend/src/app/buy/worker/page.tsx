@@ -72,7 +72,6 @@ export default function BuyPage() {
             params: {
               methodName: "register_worker",
               args: {
-                coordinator_did: job.coordinatorDid,
                 worker_did: job.workerDid,
                 endpoint_url: job.phalaEndpoint,
                 cvm_id: job.cvmId,

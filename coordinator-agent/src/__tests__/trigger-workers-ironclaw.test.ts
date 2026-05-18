@@ -65,7 +65,6 @@ import { triggerWorkersForTest, getWorkerRecordsFromEnvForTest } from '../monito
 
 const ironclawWorker = {
   account_id: 'w.testnet',
-  coordinator_did: 'did:key:z6MkCoordinator',
   worker_did: 'did:key:z6MkIronClaw',
   endpoint_url: 'http://1.2.3.4:8080',
   cvm_id: 'ironclaw-999',
@@ -75,7 +74,6 @@ const ironclawWorker = {
 
 const phalaWorker = {
   account_id: 'w2.testnet',
-  coordinator_did: 'did:key:z6MkCoordinator',
   worker_did: 'did:key:z6MkPhala',
   endpoint_url: 'http://phala-worker:3001',
   cvm_id: 'abc-uuid-phala-cvm',
@@ -150,7 +148,6 @@ describe('WORKERS env parsing', () => {
     // Construct a synthetic worker that mimics what getWorkerRecordsFromEnv would produce
     const w = {
       account_id: '',
-      coordinator_did: '',
       worker_did: 'did:key:z6MkSandbox',
       endpoint_url: 'http://127.0.0.1:8080',
       cvm_id: 'ironclaw-sandbox',
@@ -170,7 +167,6 @@ describe('WORKERS env parsing', () => {
     mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
     const w = {
       account_id: '',
-      coordinator_did: '',
       worker_did: 'did:key:z6MkPhala',
       endpoint_url: 'http://phala-worker:3001',
       cvm_id: '',
