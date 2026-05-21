@@ -32,9 +32,7 @@ worker-agent-3/dist/
 *.env.*.local
 frontend/.env.local
 sandbox/.env.*
-# M1 — docker/.env holds real keys for the Docker Compose worker stack.
-# Already covered by the bare `.env` rule above; this explicit line guards
-# against future `!docker/...` allow-lists that could silently override.
+coordinator-agent/.env.*
 docker/.env
 
 # IDE / editor

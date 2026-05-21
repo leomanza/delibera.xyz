@@ -443,14 +443,16 @@ async function checkLocalCoordination(): Promise<void> {
  */
 async function checkAndCoordinate(): Promise<void> {
   try {
-    const { getAgent } = await import('../shade-client');
-    const agent = getAgent();
+    // Per coordinator architecture spec Q2=(a), Delibera business-logic calls
+    // go through delibera-client (separate from agent-registry contract that
+    // ShadeClient targets). See doc/plans/coordinator-architecture/00-spec.md.
+    const { deliberaView } = await import('../contract/delibera-client');
 
-    // Poll contract for pending coordinations (like verifiable-ai-dao)
-    const pendingRequests: [number, CoordinationRequest][] = await agent.view({
-      methodName: 'get_pending_coordinations',
-      args: {},
-    });
+    // Poll Delibera coordinator contract for pending coordinations
+    const pendingRequests: [number, CoordinationRequest][] = await deliberaView(
+      'get_pending_coordinations',
+      {},
+    );
 
     if (pendingRequests.length === 0) {
       return;
@@ -553,11 +555,11 @@ async function processCoordination(
       })
       .filter((s): s is { worker_id: string; result_hash: string } => s !== null);
 
-    // Production path: use ShadeClient v2 for contract call
-    const { getAgent } = await import('../shade-client');
-    await getAgent().call({
-      methodName: 'record_worker_submissions',
-      args: { proposal_id: proposalId, submissions },
+    // Delibera coordinator contract call (separate from agent-registry per Q2=(a))
+    const { deliberaCall } = await import('../contract/delibera-client');
+    await deliberaCall('record_worker_submissions', {
+      proposal_id: proposalId,
+      submissions,
     });
     console.log(`Worker submissions recorded on-chain for proposal #${proposalId}`);
 

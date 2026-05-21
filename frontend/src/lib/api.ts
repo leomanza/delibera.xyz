@@ -407,14 +407,24 @@ export interface OnChainState {
 
 export async function getOnChainState(): Promise<OnChainState | null> {
   try {
-    const [owner, proposalId, allProposals, manifesto, workers] = await Promise.all([
+    const [owner, proposalId, allProposals, manifesto, registryWorkers] = await Promise.all([
       nearViewCall<string>("get_owner"),
       nearViewCall<number>("get_current_proposal_id"),
       nearViewCall<Array<[number, OnChainProposal]>>("get_all_proposals"),
       nearViewCall<Manifesto>("get_manifesto"),
-      nearViewCall<RegisteredWorker[]>("get_registered_workers"),
+      registryViewCall<RegistryWorker[]>("list_active_workers"),
     ]);
     if (owner === null || proposalId === null) return null;
+    // Workers are registered on the registry contract, not on the coordinator.
+    // Map RegistryWorker → RegisteredWorker so the dashboard renderer stays unchanged.
+    const registeredWorkers: RegisteredWorker[] = (registryWorkers ?? []).map((w) => ({
+      worker_id: w.worker_did,
+      account_id: w.account_id ?? null,
+      display_name: null,
+      registered_at: w.registered_at,
+      registered_by: w.account_id,
+      active: w.is_active,
+    }));
     return {
       owner,
       currentProposalId: proposalId,
@@ -423,7 +433,7 @@ export async function getOnChainState(): Promise<OnChainState | null> {
         proposal,
       })),
       manifesto: manifesto ?? null,
-      registeredWorkers: workers ?? [],
+      registeredWorkers,
     };
   } catch {
     return null;
