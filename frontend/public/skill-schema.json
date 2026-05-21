@@ -14,7 +14,7 @@
     "dispatch",
     "coordination",
     "registration",
-    "requires",
+    "prerequisites",
     "runtime_protocol_url"
   ],
   "properties": {
@@ -195,11 +195,11 @@
       },
       "additionalProperties": false
     },
-    "requires": {
+    "prerequisites": {
       "type": "array",
       "items": { "type": "string" },
       "minItems": 1,
-      "description": "Human-readable prerequisites the agent (or its operator) must satisfy before onboarding."
+      "description": "Human-readable prerequisites the agent (or its operator) must satisfy before onboarding. (Renamed from `requires:` to avoid a name collision with IronClaw's GatingRequirements struct, which expects an object at that key.)"
     },
     "runtime_protocol_url": {
       "type": "string",

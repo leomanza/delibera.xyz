@@ -39,7 +39,10 @@ registration:
   gas_tgas: 200
   did_method: "did:key"
 
-requires:
+# Note: `requires:` collides with IronClaw's GatingRequirements struct (expects an
+# object, not a list). Renamed to `prerequisites:` so IronClaw's `skill_install`
+# parser ignores it. The same content lives in the prose body for human readers.
+prerequisites:
   - "An ed25519 keypair (DID method: did:key)"
   - "A publicly reachable HTTPS endpoint that serves POST /webhook"
   - "An Ensue Network API key (free tier OK for testnet) — https://ensue.dev"
