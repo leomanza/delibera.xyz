@@ -1,5 +1,5 @@
 {
-  "name": "@near-shade-coordination/shared",
+  "name": "@delibera-xyz/shared",
   "version": "1.0.0",
   "description": "Shared utilities for NEAR Shade Agent coordination",
   "main": "dist/index.js",
@@ -9,6 +9,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@delibera-xyz/ensue-client": "file:../ensue-client",
     "@storacha/client": "^2.0.7",
     "axios": "^1.6.0"
   },

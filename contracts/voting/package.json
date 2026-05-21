@@ -1,5 +1,5 @@
 {
-  "name": "@near-shade-coordination/fhe-voting",
+  "name": "@delibera-xyz/fhe-voting",
   "description": "Delibera FHE blind voting contract using Zama fhEVM",
   "version": "0.1.0",
   "private": true,

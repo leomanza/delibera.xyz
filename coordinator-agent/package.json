@@ -8,6 +8,8 @@
     "dev": "DOTENV_CONFIG_PATH=.env.development.local tsx -r dotenv/config src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "docker:build": "sudo docker build --platform linux/amd64 -t yourusername/coordinator-agent:latest .",
     "docker:build:no-cache": "sudo docker build --no-cache --platform linux/amd64 -t yourusername/coordinator-agent:latest .",
     "docker:push": "sudo docker push yourusername/coordinator-agent",
@@ -18,7 +20,8 @@
     "@lit-protocol/auth": "^8.2.3",
     "@lit-protocol/lit-client": "^8.3.1",
     "@lit-protocol/networks": "^8.4.1",
-    "@near-shade-coordination/shared": "file:../shared",
+    "@delibera-xyz/ensue-client": "file:../ensue-client",
+    "@delibera-xyz/shared": "file:../shared",
     "@neardefi/shade-agent-js": "^2.0.0",
     "@onflow/fcl": "^1.21.9",
     "@stellar/stellar-sdk": "^15.0.1",
@@ -38,7 +41,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.0.0"
-  },
-  "packageManager": "pnpm@10.8.1+sha512.c50088ba998c67b8ca8c99df8a5e02fd2ae2e2b29aaf238feaa9e124248d3f48f9fb6db2424949ff901cffbb5e0f0cc1ad6aedb602cd29450751d11c35023677"
+    "typescript": "^5.0.0",
+    "vitest": "^2.0.0"
+  }
 }

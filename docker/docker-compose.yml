@@ -1,0 +1,70 @@
+# Delibera multi-worker sandbox — 3 IronClaw workers (each with bundled Ensue MCP).
+#
+# IronClaw v0.28.1 rejects http:// MCP URLs for non-loopback addresses, so each
+# worker container runs its own MCP server on 127.0.0.1:7800. Each container has
+# an isolated ~/.ironclaw/ — workers can't collide on the SQLite DB / skills /
+# identity files.
+#
+# Coordinator-agent runs on the HOST (outside Docker), connecting to workers via
+# the published host ports 8080 / 8081 / 8082.
+#
+# Build (from repo root):
+#   docker compose -f docker/docker-compose.yml build
+#
+# Run:
+#   set -a && source docker/.env && set +a
+#   docker compose -f docker/docker-compose.yml up
+
+name: delibera-multi-worker
+
+x-worker-defaults: &worker-defaults
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile.delibera-worker
+  environment: &worker-env
+    ENSUE_API_KEY: ${ENSUE_API_KEY:?ENSUE_API_KEY must be set}
+    ENSUE_COORDINATOR_ORG: ${ENSUE_COORDINATOR_ORG:-delibera_coordinator}
+    HTTP_WEBHOOK_SECRET: ${HTTP_WEBHOOK_SECRET:-sandbox-secret}
+    NEAR_AI_API_KEY: ${NEAR_AI_API_KEY:?NEAR_AI_API_KEY must be set}
+    IRONCLAW_MODEL: ${IRONCLAW_MODEL:-Qwen/Qwen3.5-122B-A10B}
+    # Show agent activity (skill match, LLM calls, tool calls)
+    RUST_LOG: ${RUST_LOG:-ironclaw=debug,info}
+  # Allocate a pseudo-TTY + stdin so IronClaw's CLI channel can initialize.
+  # Without this, agent.run() stalls in TUI/REPL setup before reaching the main
+  # message loop, even with HTTP channel configured.
+  tty: true
+  stdin_open: true
+  networks:
+    - delibera-net
+
+services:
+  worker1:
+    <<: *worker-defaults
+    environment:
+      <<: *worker-env
+      WORKER_DID: did:key:sandbox-w1
+      WORKER_NEAR_ACCOUNT: sandbox-w1.testnet
+    ports:
+      - "8080:8080"
+
+  worker2:
+    <<: *worker-defaults
+    environment:
+      <<: *worker-env
+      WORKER_DID: did:key:sandbox-w2
+      WORKER_NEAR_ACCOUNT: sandbox-w2.testnet
+    ports:
+      - "8081:8080"
+
+  worker3:
+    <<: *worker-defaults
+    environment:
+      <<: *worker-env
+      WORKER_DID: did:key:sandbox-w3
+      WORKER_NEAR_ACCOUNT: sandbox-w3.testnet
+    ports:
+      - "8082:8080"
+
+networks:
+  delibera-net:
+    driver: bridge

@@ -129,7 +129,7 @@ The reference worker-agent code (`worker-agent/src/workers/task-handler.ts::ensu
 Use the shared package for Ensue access:
 
 ```typescript
-import { createEnsueClient, getWorkerKeys } from '@near-shade-coordination/shared';
+import { createEnsueClient, getWorkerKeys } from '@delibera-xyz/shared';
 const client = createEnsueClient(); // reads ENSUE_API_KEY from env
 const keys = getWorkerKeys(workerDid);
 await client.updateMemory(keys.STATUS, 'completed');

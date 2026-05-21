@@ -25,7 +25,15 @@ type ProvisionStatus =
   | 'awaiting_near_signature'
   | 'registering'
   | 'complete'
-  | 'failed';
+  | 'failed'
+  // IronClaw-specific statuses
+  | 'creating_droplet'
+  | 'waiting_for_ip'
+  | 'waiting_for_ssh'
+  | 'waiting_for_cloud_init'
+  | 'configuring_agent'
+  | 'starting_agent'
+  | 'waiting_for_webhook';
 
 interface ProvisionJob {
   id: string;
@@ -42,6 +50,12 @@ interface ProvisionJob {
   dashboardUrl?: string;
   error?: string;
   createdAt: number;
+  // IronClaw-specific (internal — doApiToken cleared after deploy)
+  doApiToken?: string;
+  dropletId?: number;
+  dropletIp?: string;
+  webhookSecret?: string;
+  nearAiApiKey?: string;
   // Coordinator-specific
   minWorkers?: number;
   maxWorkers?: number;
@@ -75,6 +89,14 @@ function statusToStep(status: ProvisionStatus, role: 'worker' | 'coordinator' = 
     case 'registering': return role === 'coordinator' ? 'Registering coordinator on NEAR' : 'Registering on NEAR';
     case 'complete': return role === 'coordinator' ? 'Coordinator active' : 'Worker active';
     case 'failed': return 'Deployment failed';
+    // IronClaw
+    case 'creating_droplet': return 'Creating DigitalOcean Droplet';
+    case 'waiting_for_ip': return 'Waiting for server IP';
+    case 'waiting_for_ssh': return 'Server booting (cloud-init)';
+    case 'waiting_for_cloud_init': return 'Waiting for cloud-init to finish';
+    case 'configuring_agent': return 'Configuring Delibera agent';
+    case 'starting_agent': return 'Starting IronClaw agent';
+    case 'waiting_for_webhook': return 'Waiting for agent to come online (3-5 min)';
     default: return status;
   }
 }
@@ -503,6 +525,9 @@ provision.get('/status/:jobId', (c) => {
     displayName: job.displayName,
     nearAccount: job.nearAccount,
     error: job.error,
+    // IronClaw-specific
+    dropletIp: job.dropletIp,
+    webhookSecret: revealSecrets ? job.webhookSecret : undefined,
     // Coordinator-specific (only revealed when ready)
     minWorkers: job.minWorkers,
     maxWorkers: job.maxWorkers,
@@ -538,7 +563,8 @@ provision.post('/register', async (c) => {
 
   // Set display name in Ensue (non-blocking, best-effort)
   try {
-    const { createEnsueClient, K } = await import('@near-shade-coordination/shared');
+    const { createEnsueClient } = await import('@delibera-xyz/ensue-client');
+    const { K } = await import('@delibera-xyz/shared');
     const ensue = createEnsueClient();
     await ensue.updateMemory(K(`agent/${job.workerDid}/display_name`), job.displayName);
     console.log(`[provision] Display name set for ${job.workerDid}: "${job.displayName}"`);
@@ -679,6 +705,117 @@ provision.post('/external-worker', async (c) => {
   console.log(`[provision/external-worker] Generated identity for ${body.nearAccount}: ${workerDid.substring(0, 24)}...`);
 
   return c.json({ workerDid, privateKeyString });
+});
+
+// ── IronClaw Provisioning Flow ──
+
+async function provisionIronClawWorker(job: ProvisionJob): Promise<void> {
+  try {
+    // Step 1: Generate worker identity (reuses existing helpers)
+    updateJob(job.id, 'generating_identity');
+    const { workerDid, privateKeyString } = await generateWorkerIdentity();
+    job.workerDid = workerDid;
+    job.storachaPrivateKey = privateKeyString;
+    console.log(`[provision/ironclaw] Generated worker DID: ${workerDid.substring(0, 24)}...`);
+
+    // Step 2: Create per-worker Storacha delegation
+    updateJob(job.id, 'creating_space');
+    const { spaceDid: storachaSpaceDid, delegationProof: storachaDelegation } =
+      await createWorkerDelegation(workerDid);
+    console.log(`[provision/ironclaw] Storacha delegation created for space ${storachaSpaceDid}`);
+
+    // Step 3: Deploy to DigitalOcean + configure IronClaw
+    const webhookSecret = crypto.randomUUID();
+    job.webhookSecret = webhookSecret;
+
+    const { deployIronClawWorker } = await import('../ironclaw/ironclaw-deployer');
+    const ironcfg = {
+      doApiToken: job.doApiToken ?? '',
+      doRegion: 'nyc3',
+      doSize: 's-1vcpu-1gb',
+      workerDid,
+      workerNearAccount: job.nearAccount,
+      storachaPrivateKey: privateKeyString,
+      storachaDelegation,
+      storachaSpaceDid,
+      coordinatorDid: job.coordinatorDid,
+      ensueApiKey: process.env.ENSUE_API_KEY ?? '',
+      ensueCoordinatorOrg: process.env.ENSUE_ORG_NAME ?? '',
+      nearAiApiKey: job.nearAiApiKey ?? '',
+      webhookSecret,
+      webhookPort: 8080,
+      coordinatorContract: process.env.REGISTRY_CONTRACT_ID ?? 'registry.agents-coordinator.testnet',
+    };
+
+    const deployed = await deployIronClawWorker(ironcfg, (step, detail) => {
+      updateJob(job.id, step as ProvisionStatus, detail ? { step: detail } : undefined);
+    });
+
+    // Clear sensitive token immediately after deploy
+    job.doApiToken = '';
+
+    job.cvmId = deployed.cvmId;
+    job.dropletId = deployed.dropletId;
+    job.dropletIp = deployed.dropletIp;
+    job.phalaEndpoint = deployed.webhookUrl; // reuse phalaEndpoint field for webhook URL
+
+    updateJob(job.id, 'awaiting_near_signature', {
+      phalaEndpoint: deployed.webhookUrl,
+      cvmId: deployed.cvmId,
+    });
+  } catch (error: any) {
+    job.doApiToken = ''; // always clear on failure
+    console.error(`[provision/ironclaw] Job ${job.id} failed:`, error);
+    updateJob(job.id, 'failed', { error: error?.message ?? 'Unknown error' });
+  }
+}
+
+/**
+ * POST /api/provision/ironclaw-worker
+ * Start a new IronClaw worker provisioning job (DigitalOcean Droplet + IronClaw).
+ * The user's DO API token is used session-only and cleared after deploy.
+ */
+provision.post('/ironclaw-worker', async (c) => {
+  const body = await c.req.json<{
+    coordinatorDid: string;
+    displayName: string;
+    nearAccount: string;
+    doApiToken: string;
+    doRegion?: string;
+    nearAiApiKey: string;
+  }>();
+
+  if (!body.coordinatorDid || !body.displayName || !body.nearAccount || !body.doApiToken || !body.nearAiApiKey) {
+    return c.json(
+      { error: 'coordinatorDid, displayName, nearAccount, doApiToken, and nearAiApiKey are required' },
+      400,
+    );
+  }
+
+  const jobId = crypto.randomUUID();
+  const job: ProvisionJob = {
+    id: jobId,
+    role: 'worker',
+    workerDid: '',
+    storachaPrivateKey: '',
+    coordinatorDid: body.coordinatorDid,
+    displayName: body.displayName,
+    nearAccount: body.nearAccount,
+    doApiToken: body.doApiToken,
+    nearAiApiKey: body.nearAiApiKey,
+    status: 'generating_identity',
+    step: statusToStep('generating_identity', 'worker'),
+    createdAt: Date.now(),
+  };
+
+  jobs.set(jobId, job);
+
+  provisionIronClawWorker(job).catch((e) => {
+    console.error(`[provision/ironclaw] Unhandled error in job ${jobId}:`, e);
+    updateJob(jobId, 'failed', { error: e?.message ?? 'Unknown error' });
+  });
+
+  return c.json({ jobId, status: 'provisioning' });
 });
 
 export default provision;

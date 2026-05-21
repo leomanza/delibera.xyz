@@ -1,5 +1,5 @@
 import { NovaSdk, NovaError } from 'nova-sdk-js';
-import { sleep, jitter } from '@near-shade-coordination/shared';
+import { sleep, jitter } from '@delibera-xyz/shared';
 import * as crypto from 'crypto';
 
 /* ─── Robustness & Concurrency Control ────────────────────────────────────── */

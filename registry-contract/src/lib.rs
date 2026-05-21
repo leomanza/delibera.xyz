@@ -17,12 +17,16 @@ pub enum StorageKey {
     CoordinatorsByDid,       // ordinal 5 — V3 primary index
 }
 
-/// A registered worker agent, keyed by `worker_did`
+/// A registered worker agent, keyed by `worker_did`.
+///
+/// Workers are first-class entities in the registry — they do NOT pair to a
+/// specific coordinator at registration time. Coordinator discovery happens
+/// client-side via `list_active_workers()` + capability/tag filtering, with
+/// dispatch auth via off-chain HMAC secrets shared out-of-band.
 #[near(serializers = [json, borsh])]
 #[derive(Clone)]
 pub struct WorkerRecord {
     pub account_id: AccountId,
-    pub coordinator_did: String,
     pub worker_did: String,
     pub endpoint_url: String,
     pub cvm_id: String,
@@ -140,11 +144,13 @@ impl RegistryContract {
     // ========== WORKER REGISTRATION ==========
 
     /// Register or update a worker. Requires minimum deposit.
-    /// The referenced coordinator_did must exist and be active.
+    ///
+    /// Workers are first-class entities — no `coordinator_did` argument.
+    /// Coordinators discover workers via `list_active_workers()` and dispatch
+    /// off-chain (HMAC-signed webhook with a pre-shared per-worker secret).
     #[payable]
     pub fn register_worker(
         &mut self,
-        coordinator_did: String,
         worker_did: String,
         endpoint_url: String,
         cvm_id: String,
@@ -155,22 +161,8 @@ impl RegistryContract {
             format!("Minimum deposit is {}, got {}", self.min_deposit, deposit)
         );
         require!(
-            coordinator_did.starts_with("did:"),
-            "coordinator_did must start with 'did:'"
-        );
-        require!(
             worker_did.starts_with("did:"),
             "worker_did must start with 'did:'"
-        );
-
-        // Validate coordinator exists and is active
-        let coordinator = self
-            .coordinators_by_did
-            .get(&coordinator_did)
-            .expect("Coordinator not found");
-        require!(
-            coordinator.is_active,
-            "Coordinator is not active"
         );
 
         let caller = env::predecessor_account_id();
@@ -185,7 +177,6 @@ impl RegistryContract {
 
         let record = WorkerRecord {
             account_id: caller,
-            coordinator_did,
             worker_did: worker_did.clone(),
             endpoint_url,
             cvm_id,
@@ -261,14 +252,10 @@ impl RegistryContract {
 
     // ========== VIEW FUNCTIONS ==========
 
-    /// Get all active workers belonging to a specific coordinator
-    pub fn get_workers_for_coordinator(&self, coordinator_did: String) -> Vec<WorkerRecord> {
-        self.workers_by_did
-            .values()
-            .filter(|w| w.is_active && w.coordinator_did == coordinator_did)
-            .cloned()
-            .collect()
-    }
+    // NOTE: `get_workers_for_coordinator(coordinator_did)` was removed when
+    // workers became first-class (no coordinator pairing in WorkerRecord).
+    // Coordinators discover workers via `list_active_workers()` + client-side
+    // filter (by capability/tag/out-of-band agreement).
 
     /// Look up a single worker by DID
     pub fn get_worker_by_did(&self, worker_did: String) -> Option<WorkerRecord> {
@@ -366,7 +353,6 @@ mod tests {
 
     fn register_test_worker(contract: &mut RegistryContract) -> WorkerRecord {
         contract.register_worker(
-            COORD_DID.to_string(),
             WORKER_DID.to_string(),
             "https://worker1.example.com".to_string(),
             "cvm-worker-1".to_string(),
@@ -460,16 +446,30 @@ mod tests {
     #[test]
     fn test_register_worker_success() {
         let mut contract = setup_contract();
-        register_test_coordinator(&mut contract);
+        // Workers are first-class — no coordinator needs to exist beforehand.
         let record = register_test_worker(&mut contract);
 
         assert_eq!(record.worker_did, WORKER_DID);
-        assert_eq!(record.coordinator_did, COORD_DID);
         assert_eq!(record.account_id, accounts(0));
         assert_eq!(record.endpoint_url, "https://worker1.example.com");
         assert_eq!(record.cvm_id, "cvm-worker-1");
         assert!(record.is_active);
         assert_eq!(contract.list_active_workers().len(), 1);
+    }
+
+    #[test]
+    fn test_register_worker_without_coordinator() {
+        // Explicit regression for the first-class workers change: a worker
+        // must register successfully without any coordinator existing in the
+        // registry.
+        let mut contract = setup_contract();
+        assert_eq!(contract.list_active_coordinators().len(), 0);
+
+        let record = register_test_worker(&mut contract);
+        assert_eq!(record.worker_did, WORKER_DID);
+        assert_eq!(contract.list_active_workers().len(), 1);
+        // Coordinators list still empty — workers don't auto-create coordinators
+        assert_eq!(contract.list_active_coordinators().len(), 0);
     }
 
     #[test]
@@ -479,53 +479,11 @@ mod tests {
         builder
             .predecessor_account_id(accounts(0))
             .signer_account_id(accounts(0))
-            .attached_deposit(NearToken::from_near(1));
+            .attached_deposit(NearToken::from_millinear(1)); // 0.001 NEAR < 0.1 min
         testing_env!(builder.build());
         let mut contract = RegistryContract::new(accounts(0));
-        contract.register_coordinator(
-            COORD_DID.to_string(),
-            "https://coord.example.com".to_string(),
-            "cvm-1".to_string(),
-            1,
-            3,
-        );
-
-        // Now set low deposit for worker registration
-        let mut builder2 = VMContextBuilder::new();
-        builder2
-            .predecessor_account_id(accounts(0))
-            .signer_account_id(accounts(0))
-            .attached_deposit(NearToken::from_millinear(1));
-        testing_env!(builder2.build());
 
         contract.register_worker(
-            COORD_DID.to_string(),
-            WORKER_DID.to_string(),
-            "https://worker.example.com".to_string(),
-            "cvm-w-1".to_string(),
-        );
-    }
-
-    #[test]
-    #[should_panic(expected = "Coordinator not found")]
-    fn test_register_worker_nonexistent_coordinator() {
-        let mut contract = setup_contract();
-        contract.register_worker(
-            "did:key:z6MkNonexistent".to_string(),
-            WORKER_DID.to_string(),
-            "https://worker.example.com".to_string(),
-            "cvm-w-1".to_string(),
-        );
-    }
-
-    #[test]
-    #[should_panic(expected = "Coordinator is not active")]
-    fn test_register_worker_inactive_coordinator() {
-        let mut contract = setup_contract();
-        register_test_coordinator(&mut contract);
-        contract.deactivate_coordinator(COORD_DID.to_string());
-        contract.register_worker(
-            COORD_DID.to_string(),
             WORKER_DID.to_string(),
             "https://worker.example.com".to_string(),
             "cvm-w-1".to_string(),
@@ -536,9 +494,7 @@ mod tests {
     #[should_panic(expected = "worker_did must start with 'did:'")]
     fn test_register_worker_invalid_did() {
         let mut contract = setup_contract();
-        register_test_coordinator(&mut contract);
         contract.register_worker(
-            COORD_DID.to_string(),
             "not-a-did".to_string(),
             "https://worker.example.com".to_string(),
             "cvm-w-1".to_string(),
@@ -548,12 +504,10 @@ mod tests {
     #[test]
     fn test_register_worker_upsert() {
         let mut contract = setup_contract();
-        register_test_coordinator(&mut contract);
         register_test_worker(&mut contract);
 
         // Re-register same worker DID with updated endpoint
         let updated = contract.register_worker(
-            COORD_DID.to_string(),
             WORKER_DID.to_string(),
             "https://new-worker.example.com".to_string(),
             "cvm-worker-updated".to_string(),
@@ -562,38 +516,28 @@ mod tests {
         assert_eq!(contract.list_active_workers().len(), 1);
     }
 
-    // ========== VIEW: get_workers_for_coordinator ==========
+    // ========== VIEW: list_active_workers ==========
 
     #[test]
-    fn test_get_workers_for_coordinator() {
+    fn test_list_active_workers_returns_all() {
         let mut contract = setup_contract();
-        register_test_coordinator(&mut contract);
         register_test_worker(&mut contract);
 
-        // Register a second worker under same coordinator
+        // Register a second worker — no coordinator pairing required
         contract.register_worker(
-            COORD_DID.to_string(),
             WORKER_DID_2.to_string(),
             "https://worker2.example.com".to_string(),
             "cvm-worker-2".to_string(),
         );
 
-        let workers = contract.get_workers_for_coordinator(COORD_DID.to_string());
+        let workers = contract.list_active_workers();
         assert_eq!(workers.len(), 2);
 
-        // Deactivate one, should only return 1
+        // Deactivating one excludes it from the active list
         contract.deactivate_worker(WORKER_DID.to_string());
-        let workers = contract.get_workers_for_coordinator(COORD_DID.to_string());
+        let workers = contract.list_active_workers();
         assert_eq!(workers.len(), 1);
         assert_eq!(workers[0].worker_did, WORKER_DID_2);
-    }
-
-    #[test]
-    fn test_get_workers_for_coordinator_empty() {
-        let mut contract = setup_contract();
-        register_test_coordinator(&mut contract);
-        let workers = contract.get_workers_for_coordinator(COORD_DID.to_string());
-        assert_eq!(workers.len(), 0);
     }
 
     // ========== VIEW: get_worker_by_did ==========

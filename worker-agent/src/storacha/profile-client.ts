@@ -19,7 +19,7 @@
 import { encryptAndVault, retrieveAndDecrypt, isVaultConfigured } from './vault';
 import { createStorachaClient, getAgentDid, isStorachaConfigured } from './identity';
 import { encryptForEnsue, decryptFromEnsue } from './local-crypto';
-import { K } from '@near-shade-coordination/shared';
+import { K } from '@delibera-xyz/shared';
 
 // Use indirect dynamic import to prevent tsc from compiling import() to require().
 // viem is ESM-only; require() fails with ERR_PACKAGE_PATH_NOT_EXPORTED.
@@ -70,7 +70,7 @@ let _ensueClient: any = null;
 
 async function getEnsue() {
   if (!_ensueClient) {
-    const { createEnsueClient } = await import('@near-shade-coordination/shared');
+    const { createEnsueClient } = await import('@delibera-xyz/shared');
     _ensueClient = createEnsueClient();
   }
   return _ensueClient;

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { EnsueClient, createEnsueClient, NameResolver } from '@near-shade-coordination/shared';
+import { EnsueClient, createEnsueClient, NameResolver } from '@delibera-xyz/shared';
 import {
   MEMORY_KEYS,
   getWorkerKeys,
@@ -9,7 +9,7 @@ import {
   getCoordinatorSnapshotKey,
   PROPOSAL_INDEX_KEY,
   ENSUE_PREFIX,
-} from '@near-shade-coordination/shared';
+} from '@delibera-xyz/shared';
 import { getAgentDid } from '../storacha/identity';
 import { triggerLocalCoordination } from '../monitor/memory-monitor';
 import { selectJury, verifyJurySelection } from '../vrf/jury-selector';
@@ -116,10 +116,8 @@ async function getRegistryWorkers(): Promise<Array<{
 }>> {
   try {
     const { localViewRegistry } = await import('../contract/local-contract');
-    const coordinatorDID = await getAgentDid();
-    const workers = await localViewRegistry<any[]>('get_workers_for_coordinator', {
-      coordinator_did: coordinatorDID,
-    });
+    // Workers are first-class — list all active, filter client-side if needed.
+    const workers = await localViewRegistry<any[]>('list_active_workers', {});
     const mapped = (workers ?? []).map(w => ({
       did: w.worker_did,
       account_id: w.account_id ?? null,
@@ -350,17 +348,9 @@ app.post('/workers/register', async (c) => {
     }
 
     const { localRegisterWorkerInRegistry } = await import('../contract/local-contract');
-    let coordinatorDID: string;
-    try {
-      coordinatorDID = await getAgentDid();
-    } catch (err) {
-      const reason = err instanceof Error ? err.message : 'unknown';
-      return c.json({ error: `Cannot resolve coordinator DID: ${reason}` }, 500);
-    }
-
-    console.log(`[register] Registering worker ${workerDid} → coordinator ${coordinatorDID} (endpoint: ${endpointUrl})`);
+    // Workers are first-class — no coordinator pairing at registration.
+    console.log(`[register] Registering worker ${workerDid} (endpoint: ${endpointUrl})`);
     const result = await localRegisterWorkerInRegistry(
-      coordinatorDID,
       workerDid,
       endpointUrl,
       'manual',

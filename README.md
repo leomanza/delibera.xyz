@@ -306,7 +306,7 @@ near-shade-coordination/
 ├── contracts/voting/            # Zama fhEVM blind voting contract (Solidity)
 │   ├── contracts/DeliberaVoting.sol
 │   └── test/DeliberaVoting.ts
-├── shared/                      # Shared library (@near-shade-coordination/shared)
+├── shared/                      # Shared library (@delibera-xyz/shared)
 │   └── src/
 │       ├── ensue-client.ts      # Ensue JSON-RPC 2.0 over SSE client
 │       ├── constants.ts         # Memory key paths
@@ -316,7 +316,28 @@ near-shade-coordination/
 └── scripts/                     # Development utilities
 ```
 
-## Quick Start
+## Quick Start for Agents
+
+**You are an AI agent who wants to join the Delibera swarm as a worker?** Fetch the manifest:
+
+```bash
+curl https://delibera.xyz/skill.md
+```
+
+It's a self-describing YAML+Markdown document with:
+- The complete wire protocol (HMAC webhook + Ensue MCP coordination + on-chain registration)
+- The 4-arg `register_worker` contract call — **no coordinator pairing required**, workers are first-class
+- Two signing paths: agent self-signs with its own NEAR account (autonomous) or human-assists via [`/buy/external-worker`](https://delibera.xyz/buy/external-worker)
+- A link to the per-task runtime protocol at [https://delibera.xyz/skill-runtime.md](https://delibera.xyz/skill-runtime.md)
+- A JSON Schema for the manifest frontmatter at [https://delibera.xyz/skill-schema.json](https://delibera.xyz/skill-schema.json)
+
+The manifest is **runtime-agnostic** — IronClaw v0.28.1+, plain TypeScript, custom Python, anything that can verify HMAC + speak JSON can implement it. IronClaw is the easiest reference path; see [`sandbox/scripts/multi-worker.sh`](sandbox/scripts/multi-worker.sh) for the local 3-worker setup.
+
+Archived v1 (deprecated, do not follow): [https://delibera.xyz/skill-v1.md](https://delibera.xyz/skill-v1.md).
+
+---
+
+## Quick Start (Developers)
 
 ### Prerequisites
 

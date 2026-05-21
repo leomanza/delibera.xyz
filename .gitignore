@@ -12,6 +12,9 @@ coordinator-agent/dist/
 coordinator-agent/.next
 worker-agent/node_modules/
 worker-agent/dist/
+ensue-client/dist/
+ensue-mcp-server/dist/
+protocol-api/dist/
 
 # Legacy (to be deleted)
 worker-agent-1/node_modules/
@@ -28,6 +31,9 @@ worker-agent-3/dist/
 *.env.development.local
 *.env.*.local
 frontend/.env.local
+sandbox/.env.*
+coordinator-agent/.env.*
+docker/.env
 
 # IDE / editor
 .claude/settings.local.json
@@ -37,3 +43,12 @@ frontend/.env.local
 
 # Logs
 *.log
+
+# Local reference clones — read-only research, never committed
+.references/
+
+doc/plans/
+
+.claude/
+
+.playwright-mcp/

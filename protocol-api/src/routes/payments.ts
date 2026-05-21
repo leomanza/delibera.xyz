@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
-import { EnsueClient, createEnsueClient, K } from '@near-shade-coordination/shared';
+import { createEnsueClient, type IMemoryClient } from '@delibera-xyz/ensue-client';
+import { K } from '@delibera-xyz/shared';
 
 const app = new Hono();
 
@@ -7,8 +8,8 @@ const PINGPAY_API_URL = process.env.PINGPAY_API_URL || 'https://pay.pingpay.io/a
 const PINGPAY_API_KEY = process.env.PINGPAY_API_KEY || '';
 const PINGPAY_WEBHOOK_SECRET = process.env.PINGPAY_WEBHOOK_SECRET || '';
 
-let _ensueClient: EnsueClient | null = null;
-function getEnsueClient(): EnsueClient {
+let _ensueClient: IMemoryClient | null = null;
+function getEnsueClient(): IMemoryClient {
   if (!_ensueClient) _ensueClient = createEnsueClient();
   return _ensueClient;
 }

@@ -189,7 +189,6 @@ export default function ExternalWorkerPage() {
             params: {
               methodName: "register_worker",
               args: {
-                coordinator_did: workerData.coordinatorDid,
                 worker_did: workerData.workerDid,
                 endpoint_url: workerData.endpointUrl,
                 cvm_id: "local",

@@ -180,12 +180,10 @@ export async function logArchivalToNear(
 
   try {
     // Log via Ensue memory for now (NEAR contract method can be added later)
-    const { createEnsueClient } = await import(
-      '@near-shade-coordination/shared'
-    );
+    const { createEnsueClient } = await import('@delibera-xyz/ensue-client');
     const client = createEnsueClient();
 
-    const { K } = await import('@near-shade-coordination/shared');
+    const { K } = await import('@delibera-xyz/shared');
     const archivalKey = K(`coordination/archival/${proposalId}`);
     await client.updateMemory(
       archivalKey,

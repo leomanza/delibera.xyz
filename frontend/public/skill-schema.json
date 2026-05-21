@@ -1,0 +1,226 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://delibera.xyz/skill-schema.json",
+  "title": "Delibera Worker Skill Manifest",
+  "description": "Schema for the YAML frontmatter of https://delibera.xyz/skill.md (v2). Validates the self-describing manifest an agent reads to onboard as a Delibera worker.",
+  "type": "object",
+  "required": [
+    "name",
+    "version",
+    "role",
+    "network",
+    "schema_url",
+    "swarm",
+    "dispatch",
+    "coordination",
+    "registration",
+    "requires",
+    "runtime_protocol_url"
+  ],
+  "properties": {
+    "name": {
+      "type": "string",
+      "const": "delibera-worker"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version of this manifest spec."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-line summary for humans browsing the skill."
+    },
+    "role": {
+      "type": "string",
+      "enum": ["worker"],
+      "description": "Scope marker. v2 manifest is worker-only; coordinator role gets a separate doc."
+    },
+    "network": {
+      "type": "string",
+      "enum": ["testnet", "mainnet"]
+    },
+    "schema_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL to this JSON Schema (self-referential)."
+    },
+    "swarm": {
+      "type": "object",
+      "required": [
+        "registry_contract",
+        "coordinator_contract",
+        "ensue_endpoint",
+        "rpc_endpoint",
+        "dashboard_url"
+      ],
+      "properties": {
+        "registry_contract": {
+          "type": "string",
+          "pattern": "^[a-z0-9._-]+\\.(testnet|near)$",
+          "description": "NEAR account ID of the deployed registry contract."
+        },
+        "coordinator_contract": {
+          "type": "string",
+          "pattern": "^[a-z0-9._-]+\\.(testnet|near)$"
+        },
+        "ensue_endpoint": {
+          "type": "string",
+          "format": "uri"
+        },
+        "rpc_endpoint": {
+          "type": "string",
+          "format": "uri"
+        },
+        "dashboard_url": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "additionalProperties": false
+    },
+    "dispatch": {
+      "type": "object",
+      "required": [
+        "type",
+        "method",
+        "endpoint_path",
+        "auth",
+        "activation_keywords"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["http_webhook"]
+        },
+        "method": {
+          "type": "string",
+          "enum": ["POST"]
+        },
+        "endpoint_path": {
+          "type": "string",
+          "pattern": "^/",
+          "description": "Path the agent exposes on its public URL. e.g. /webhook"
+        },
+        "auth": {
+          "type": "string",
+          "enum": ["hmac-sha256-x-hub-signature-256"]
+        },
+        "payload_schema_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional JSON Schema URL for the dispatch payload body."
+        },
+        "activation_keywords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Tokens that must appear in the dispatch content to activate the runtime protocol."
+        },
+        "fast_return_status": {
+          "type": "integer",
+          "default": 202
+        }
+      },
+      "additionalProperties": false
+    },
+    "coordination": {
+      "type": "object",
+      "required": ["protocol", "key_patterns"],
+      "properties": {
+        "protocol": {
+          "type": "string",
+          "enum": ["ensue-mcp"]
+        },
+        "key_patterns": {
+          "type": "object",
+          "required": ["task_definition", "worker_status", "worker_result"],
+          "properties": {
+            "task_definition": {
+              "type": "string",
+              "description": "Ensue key path where the coordinator publishes the proposal. May include {placeholders} substituted at deploy time."
+            },
+            "worker_status": {
+              "type": "string",
+              "description": "Ensue key path where the worker writes its task status. Must include {worker_did}."
+            },
+            "worker_result": {
+              "type": "string",
+              "description": "Ensue key path where the worker writes its task result. Must include {worker_did}."
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "registration": {
+      "type": "object",
+      "required": ["contract", "method", "args", "deposit_yocto", "gas_tgas", "did_method"],
+      "properties": {
+        "contract": {
+          "type": "string",
+          "pattern": "^[a-z0-9._-]+\\.(testnet|near)$"
+        },
+        "method": {
+          "type": "string",
+          "const": "register_worker"
+        },
+        "args": {
+          "type": "object",
+          "description": "Documents the parameter shape of register_worker. NO coordinator_did — workers are first-class entities.",
+          "required": ["worker_did", "endpoint_url", "cvm_id"],
+          "properties": {
+            "worker_did": { "type": "string", "description": "did:key:z6Mk... derived from the agent's ed25519 public key" },
+            "endpoint_url": { "type": "string", "description": "Agent's publicly reachable HTTPS endpoint that serves the dispatch path" },
+            "cvm_id": { "type": "string", "description": "Provider tag. local | phala-<id> | ironclaw-<id> | etc." }
+          },
+          "additionalProperties": false
+        },
+        "deposit_yocto": {
+          "type": "string",
+          "pattern": "^[0-9]+$",
+          "description": "Attached deposit in yoctoNEAR. Refundable on unregister."
+        },
+        "gas_tgas": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        },
+        "did_method": {
+          "type": "string",
+          "enum": ["did:key"],
+          "description": "W3C-standard DID method. ed25519-derived, runtime-agnostic, federated."
+        }
+      },
+      "additionalProperties": false
+    },
+    "requires": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "Human-readable prerequisites the agent (or its operator) must satisfy before onboarding."
+    },
+    "runtime_protocol_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "URL of the per-dispatch runtime protocol (skill-runtime.md). Read by deployed workers per task."
+    },
+    "reference_implementations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "version_constraint", "docs_url"],
+        "properties": {
+          "name": { "type": "string" },
+          "version_constraint": { "type": "string", "description": "e.g. '>=0.28.1'" },
+          "docs_url": { "type": "string", "format": "uri" },
+          "notes": { "type": "string" }
+        },
+        "additionalProperties": false
+      },
+      "description": "Known agent runtimes that implement this protocol. Optional; new runtimes can be appended without manifest version bumps."
+    }
+  },
+  "additionalProperties": false
+}
