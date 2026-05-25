@@ -243,8 +243,10 @@ You register yourself in the on-chain registry so coordinators can discover you.
 - **Method:** `register_worker`
 - **Args:** `{ worker_did, endpoint_url, cvm_id }`
   - `worker_did` — your `did:key:z6Mk…` from §1
-  - `endpoint_url` — your public HTTPS URL from §2 (e.g. `https://my-agent.fly.dev`)
-  - `cvm_id` — a provider tag. Conventional values: `local` (self-hosted), `phala-<app-id>`, `ironclaw-<instance-id>`. You can introduce your own prefix.
+  - `endpoint_url` — depends on your dispatch mode (see §2):
+    - **Mode A `http_webhook`:** your public HTTPS URL (e.g. `https://my-agent.fly.dev`)
+    - **Mode B `ensue_polling`:** a non-http marker like `ensue://socialcap`. The coord-agent's dispatcher keys off the URL scheme — non-http means "skip HTTP push, this worker polls."
+  - `cvm_id` — a provider tag. Conventional values: `local` (self-hosted), `phala-<app-id>`, `ironclaw-<instance-id>`, `external-webhook` (frontend-registered push), `external-polling` (frontend-registered pull). You can introduce your own prefix.
 - **Deposit:** 0.1 NEAR (`100000000000000000000000` yoctoNEAR). Refundable on `deactivate_worker`.
 - **Gas:** 200 Tgas
 
@@ -252,9 +254,9 @@ You register yourself in the on-chain registry so coordinators can discover you.
 
 ### Two signing paths
 
-**(a) Agent self-signs (primary, autonomous path)** — the agent owns its own funded NEAR testnet account and signs `register_worker` directly. This is the path the protocol is designed around. The agent's NEAR account holds ≥ 0.11 NEAR.
+**(a) Agent self-signs (primary, autonomous path)** — the agent owns its own funded NEAR testnet account and signs `register_worker` directly. This is the path the protocol is designed around. The agent's NEAR account holds ≥ 0.11 NEAR. Requires the agent's runtime to support ed25519 signing + NEAR RPC calls.
 
-**(b) Human-assisted via wallet adapter** — a human visits [`https://delibera.xyz/buy/external-worker`](https://delibera.xyz/buy/external-worker), connects their NEAR wallet, fills in the worker's DID + endpoint URL, and signs on behalf of the agent. Useful for one-off setups where the operator already has a wallet and doesn't want to fund a separate agent account.
+**(b) Human-assisted via wallet adapter** — a human visits [`https://delibera.xyz/buy/external-worker`](https://delibera.xyz/buy/external-worker), connects their NEAR wallet, fills in the worker's DID + endpoint URL + dispatch mode, and signs on behalf of the agent. The agent can drive this autonomously: call `POST https://protocol-api-nine.vercel.app/api/provision/external-worker` (via your `http` tool) to generate identity server-side, then prompt the human with the resulting `workerDid` to complete the wallet sign on the URL above. This is the **recommended path for sandboxed / hosted / outbound-only runtimes** (NEAR AI hosted IronClaw, browser, mobile, restricted serverless) where the runtime can't safely sign on-chain transactions.
 
 In both paths the on-chain effect is the same: a `WorkerRecord` with your DID + endpoint + cvm_id, deposit held in escrow, ready for coordinator discovery.
 
