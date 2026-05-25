@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { getActiveCoordinators, type RegistryCoordinator } from "@/lib/api";
 
+export type DispatchType = "http_webhook" | "ensue_polling";
+
 interface ConfigScreenProps {
   accountId: string;
   loading: boolean;
@@ -11,8 +13,11 @@ interface ConfigScreenProps {
     displayName: string;
     endpointUrl: string;
     coordinatorDid: string;
+    dispatchType: DispatchType;
   }) => void;
 }
+
+const POLLING_ENDPOINT_MARKER = "ensue://socialcap";
 
 function coordLabel(c: RegistryCoordinator): string {
   return c.account_id || `${c.coordinator_did.substring(0, 20)}...`;
@@ -20,6 +25,7 @@ function coordLabel(c: RegistryCoordinator): string {
 
 export default function ConfigScreen({ accountId, loading, error, onSubmit }: ConfigScreenProps) {
   const [displayName, setDisplayName] = useState("");
+  const [dispatchType, setDispatchType] = useState<DispatchType>("http_webhook");
   const [endpointUrl, setEndpointUrl] = useState("");
   const [coordinatorDid, setCoordinatorDid] = useState("");
   const [coordinators, setCoordinators] = useState<RegistryCoordinator[]>([]);
@@ -35,10 +41,24 @@ export default function ConfigScreen({ accountId, loading, error, onSubmit }: Co
       .finally(() => setLoadingCoords(false));
   }, []);
 
+  // When the user switches to polling mode, pre-fill the marker endpoint
+  // so the coord-agent's dispatcher recognizes the worker as polling-mode.
+  // When switching back to push, clear it so the user is prompted to enter
+  // a real HTTPS endpoint.
+  useEffect(() => {
+    if (dispatchType === "ensue_polling") {
+      setEndpointUrl(POLLING_ENDPOINT_MARKER);
+    } else if (endpointUrl === POLLING_ENDPOINT_MARKER) {
+      setEndpointUrl("");
+    }
+  }, [dispatchType]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const canSubmit =
     displayName.length >= 2 &&
-    endpointUrl.startsWith("http") &&
-    coordinatorDid.length > 0;
+    coordinatorDid.length > 0 &&
+    (dispatchType === "ensue_polling"
+      ? endpointUrl === POLLING_ENDPOINT_MARKER
+      : endpointUrl.startsWith("https://") || endpointUrl.startsWith("http://"));
 
   return (
     <div className="rounded border border-[#00ff41]/10 bg-[#0a0f0a]/80 p-6 terminal-card space-y-5">
@@ -73,17 +93,61 @@ export default function ConfigScreen({ accountId, loading, error, onSubmit }: Co
 
         <div>
           <label className="block text-[10px] text-zinc-500 font-mono mb-1">
-            Agent endpoint URL
+            Activation mode
+          </label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setDispatchType("http_webhook")}
+              className={`flex-1 px-3 py-2 rounded text-[10px] font-mono border transition-all ${
+                dispatchType === "http_webhook"
+                  ? "bg-[#00ff41]/10 border-[#00ff41]/30 text-[#00ff41]"
+                  : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              push (http_webhook)
+            </button>
+            <button
+              type="button"
+              onClick={() => setDispatchType("ensue_polling")}
+              className={`flex-1 px-3 py-2 rounded text-[10px] font-mono border transition-all ${
+                dispatchType === "ensue_polling"
+                  ? "bg-[#00ff41]/10 border-[#00ff41]/30 text-[#00ff41]"
+                  : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:text-zinc-300"
+              }`}
+            >
+              pull (ensue_polling)
+            </button>
+          </div>
+          <p className="text-[9px] text-zinc-700 font-mono mt-1">
+            {dispatchType === "http_webhook"
+              ? "Coordinator HMACs the dispatch body and POSTs to your /webhook endpoint. Lowest latency. Requires a publicly reachable HTTPS endpoint."
+              : "Your agent reads Ensue on its own cadence. Use when your runtime is outbound-only (NEAR AI hosted IronClaw, browser, mobile, restricted serverless)."}
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-[10px] text-zinc-500 font-mono mb-1">
+            {dispatchType === "http_webhook" ? "Agent endpoint URL" : "Endpoint marker (auto-filled)"}
           </label>
           <input
-            type="url"
+            type="text"
             value={endpointUrl}
             onChange={(e) => setEndpointUrl(e.target.value)}
-            placeholder="https://my-agent.example.com"
-            className="w-full px-3 py-2 rounded bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono placeholder:text-zinc-700 focus:border-[#00ff41]/30 focus:outline-none"
+            disabled={dispatchType === "ensue_polling"}
+            placeholder={
+              dispatchType === "http_webhook"
+                ? "https://my-agent.example.com"
+                : POLLING_ENDPOINT_MARKER
+            }
+            className={`w-full px-3 py-2 rounded bg-zinc-900 border border-zinc-800 text-xs font-mono placeholder:text-zinc-700 focus:border-[#00ff41]/30 focus:outline-none ${
+              dispatchType === "ensue_polling" ? "text-zinc-500 cursor-not-allowed" : "text-zinc-300"
+            }`}
           />
           <p className="text-[9px] text-zinc-700 font-mono mt-1">
-            Must implement GET / (health) and POST /api/task/execute
+            {dispatchType === "http_webhook"
+              ? "Must implement POST /webhook (see skill.md, Mode A)."
+              : "Polling workers register with a non-http marker so the dispatcher skips HTTP push. The agent activates by reading Ensue (see skill.md, Mode B)."}
           </p>
         </div>
 
@@ -122,7 +186,7 @@ export default function ConfigScreen({ accountId, loading, error, onSubmit }: Co
         )}
 
         <button
-          onClick={() => onSubmit({ displayName, endpointUrl, coordinatorDid })}
+          onClick={() => onSubmit({ displayName, endpointUrl, coordinatorDid, dispatchType })}
           disabled={!canSubmit || loading}
           className="w-full mt-2 px-4 py-3 rounded bg-[#00ff41]/10 border border-[#00ff41]/30 text-sm font-semibold text-[#00ff41] font-mono hover:bg-[#00ff41]/15 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
         >

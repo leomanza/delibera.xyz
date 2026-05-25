@@ -21,6 +21,7 @@ interface ExternalWorkerData {
   endpointUrl: string;
   coordinatorDid: string;
   nearAccount: string;
+  dispatchType: "http_webhook" | "ensue_polling";
 }
 
 type Screen = "entry" | "config" | "signing" | "success";
@@ -138,7 +139,12 @@ export default function ExternalWorkerPage() {
   const currentScreen: Screen = !accountId ? "entry" : screen;
 
   const handleGenerate = useCallback(
-    async (params: { displayName: string; endpointUrl: string; coordinatorDid: string }) => {
+    async (params: {
+      displayName: string;
+      endpointUrl: string;
+      coordinatorDid: string;
+      dispatchType: "http_webhook" | "ensue_polling";
+    }) => {
       if (!accountId) return;
       setGenerating(true);
       setError(null);
@@ -151,6 +157,7 @@ export default function ExternalWorkerPage() {
             nearAccount: accountId,
             endpointUrl: params.endpointUrl,
             coordinatorDid: params.coordinatorDid,
+            dispatchType: params.dispatchType,
           }),
         });
         if (!res.ok) {
@@ -165,6 +172,7 @@ export default function ExternalWorkerPage() {
           endpointUrl: params.endpointUrl,
           coordinatorDid: params.coordinatorDid,
           nearAccount: accountId,
+          dispatchType: params.dispatchType,
         });
         setScreen("signing");
       } catch (err) {
@@ -181,6 +189,12 @@ export default function ExternalWorkerPage() {
     setSigning(true);
     setError(null);
     try {
+      // cvm_id encodes dispatch type so coord-agent's dispatcher can route correctly:
+      //   http_webhook   → "external-webhook" (default registry flow; HTTP push)
+      //   ensue_polling  → "external-polling" (dispatcher skips HTTP, agent reads Ensue)
+      // The coord-agent's actual dispatch decision keys off endpoint_url scheme
+      // (non-http → polling), so this cvm_id is mostly for dashboard / log clarity.
+      const cvmId = workerData.dispatchType === "ensue_polling" ? "external-polling" : "external-webhook";
       await signAndSendTransaction({
         receiverId: REGISTRY_CONTRACT_ID,
         actions: [
@@ -191,7 +205,7 @@ export default function ExternalWorkerPage() {
               args: {
                 worker_did: workerData.workerDid,
                 endpoint_url: workerData.endpointUrl,
-                cvm_id: "local",
+                cvm_id: cvmId,
               },
               gas: "200000000000000",
               deposit: "100000000000000000000000",

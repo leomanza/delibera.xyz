@@ -81,48 +81,73 @@
     },
     "dispatch": {
       "type": "object",
-      "required": [
-        "type",
-        "method",
-        "endpoint_path",
-        "auth",
-        "activation_keywords"
-      ],
-      "properties": {
-        "type": {
-          "type": "string",
-          "enum": ["http_webhook"]
+      "required": ["type"],
+      "description": "How the coordinator activates this worker for a new task. Two modes — see oneOf. See doc/plans/dispatch-modes/00-spec.md for trade-offs.",
+      "oneOf": [
+        {
+          "title": "http_webhook (push)",
+          "description": "Coordinator HMACs the dispatch body and POSTs to the worker's endpoint. Requires inbound HTTPS reachability (tunnel or public IP). Lowest latency. Default for self-hosted runtimes.",
+          "type": "object",
+          "required": ["type", "method", "endpoint_path", "auth", "activation_keywords"],
+          "properties": {
+            "type": { "const": "http_webhook" },
+            "method": {
+              "type": "string",
+              "enum": ["POST"]
+            },
+            "endpoint_path": {
+              "type": "string",
+              "pattern": "^/",
+              "description": "Path the agent exposes on its public URL. e.g. /webhook"
+            },
+            "auth": {
+              "type": "string",
+              "enum": ["hmac-sha256-x-hub-signature-256"]
+            },
+            "payload_schema_url": {
+              "type": "string",
+              "format": "uri",
+              "description": "Optional JSON Schema URL for the dispatch payload body."
+            },
+            "activation_keywords": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "description": "Tokens that must appear in the dispatch content to activate the runtime protocol."
+            },
+            "fast_return_status": {
+              "type": "integer",
+              "default": 202
+            }
+          },
+          "additionalProperties": false
         },
-        "method": {
-          "type": "string",
-          "enum": ["POST"]
-        },
-        "endpoint_path": {
-          "type": "string",
-          "pattern": "^/",
-          "description": "Path the agent exposes on its public URL. e.g. /webhook"
-        },
-        "auth": {
-          "type": "string",
-          "enum": ["hmac-sha256-x-hub-signature-256"]
-        },
-        "payload_schema_url": {
-          "type": "string",
-          "format": "uri",
-          "description": "Optional JSON Schema URL for the dispatch payload body."
-        },
-        "activation_keywords": {
-          "type": "array",
-          "items": { "type": "string" },
-          "minItems": 1,
-          "description": "Tokens that must appear in the dispatch content to activate the runtime protocol."
-        },
-        "fast_return_status": {
-          "type": "integer",
-          "default": 202
+        {
+          "title": "ensue_polling (pull)",
+          "description": "Worker reads Ensue itself on a cadence. No inbound endpoint needed. Use when the runtime is outbound-only — sandboxed SaaS (NEAR AI hosted IronClaw, etc.), browser, mobile, restricted serverless. Higher activation latency than push.",
+          "type": "object",
+          "required": ["type", "poll_key", "poll_interval_seconds"],
+          "properties": {
+            "type": { "const": "ensue_polling" },
+            "poll_key": {
+              "type": "string",
+              "description": "The Ensue key the worker polls for new task definitions. Convention: 'coordination/config/task_definition'."
+            },
+            "poll_interval_seconds": {
+              "type": "integer",
+              "minimum": 5,
+              "default": 30,
+              "description": "Recommended minimum poll cadence. Smaller values add Ensue request volume; larger values add activation latency."
+            },
+            "task_signal_keys": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Additional Ensue keys the worker may watch for targeted dispatch (e.g. per-worker inbox like 'coordination/tasks/{worker_did}/inbox')."
+            }
+          },
+          "additionalProperties": false
         }
-      },
-      "additionalProperties": false
+      ]
     },
     "coordination": {
       "type": "object",

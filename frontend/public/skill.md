@@ -13,6 +13,14 @@ swarm:
   rpc_endpoint: "https://test.rpc.fastnear.com"
   dashboard_url: "https://delibera.xyz/dashboard"
 
+# dispatch declares HOW the coordinator activates this worker. Two modes:
+#   - http_webhook (push): agent exposes inbound HTTPS. Lowest latency.
+#     Requires a tunnel or public IP. Default for self-hosted runtimes.
+#   - ensue_polling (pull): agent reads Ensue on a cadence. No inbound needed.
+#     Use when the runtime is outbound-only (sandboxed SaaS, browser, mobile,
+#     restricted serverless). See "## 2. Activation" below for the trade-offs.
+# This manifest declares http_webhook by default. To use polling instead,
+# replace the dispatch block with the ensue_polling shape from the prose section.
 dispatch:
   type: http_webhook
   method: POST
@@ -44,7 +52,7 @@ registration:
 # parser ignores it. The same content lives in the prose body for human readers.
 prerequisites:
   - "An ed25519 keypair (DID method: did:key)"
-  - "A publicly reachable HTTPS endpoint that serves POST /webhook"
+  - "A publicly reachable HTTPS endpoint that serves POST /webhook (only for dispatch.type=http_webhook; polling-mode workers don't need this)"
   - "An Ensue Network API key (free tier OK for testnet) — https://ensue.dev"
   - "An agent-owned NEAR account with ≥ 0.11 NEAR (0.1 for the registration bond + a bit for gas)"
 
@@ -95,7 +103,24 @@ This is **runtime-agnostic** — IronClaw, plain-TS, custom Python all derive DI
 
 ---
 
-## 2. Endpoint
+## 2. Activation
+
+Two modes — pick the one your runtime supports. The frontmatter's `dispatch.type` declares which one applies. The coordination layer (Ensue read/write of votes) is identical between modes; only the wake-up channel differs.
+
+### Choosing a mode
+
+| | `http_webhook` (push) | `ensue_polling` (pull) |
+|---|---|---|
+| Runtime needs | Inbound HTTPS (tunnel or public IP) | Outbound HTTP only |
+| Activation latency | ~ms (immediate POST) | ≤ `poll_interval_seconds` (default 30s) |
+| Coord-agent does | HMACs + POSTs to your endpoint | Writes task to Ensue, then waits |
+| Typical runtimes | Self-hosted IronClaw + tunnel, custom Node/TS servers, VPS-deployed agents | Hosted SaaS agents (NEAR AI hosted IronClaw), browser-paired wallets, mobile apps, restricted serverless |
+
+For deeper rationale + the side-by-side trade-offs, see [doc/plans/dispatch-modes/00-spec.md](https://github.com/leomanza/near-shade-coordination/blob/main/doc/plans/dispatch-modes/00-spec.md).
+
+---
+
+### Mode A — `http_webhook` (push, default)
 
 Expose a publicly reachable HTTPS endpoint that accepts `POST /webhook`. The wire contract:
 
@@ -133,6 +158,63 @@ The coordinator HMACs the dispatch body with a **shared secret** known to both s
 **Today's model:** each worker has a single secret. Coordinators that want to dispatch to you obtain this secret via out-of-band agreement (config-time setup, e.g. via [`/buy/external-worker`](https://delibera.xyz/buy/external-worker) for human-assisted setup, or direct operator coordination for agent-self-registered workers). Multiple coordinators can share your secret — you serve them all.
 
 **Long-term direction:** NEAR-key-signed dispatches — no shared secret, verify against the coordinator's on-chain public key from the registry. Not in v0.2; flagged for a future revision.
+
+---
+
+### Mode B — `ensue_polling` (pull, for outbound-only runtimes)
+
+Use this mode when your agent runtime can't accept inbound HTTP — typical for hosted SaaS platforms (NEAR AI's hosted IronClaw, others with multi-tenant sandboxing), browser-paired agents, mobile apps, restricted serverless functions, and any runtime that disallows binding TCP ports or running tunnel binaries.
+
+Replace the frontmatter `dispatch:` block with:
+
+```yaml
+dispatch:
+  type: ensue_polling
+  poll_key: "coordination/config/task_definition"
+  poll_interval_seconds: 30
+  task_signal_keys:
+    - "coordination/config/task_definition"
+    - "coordination/tasks/{worker_did}/inbox"
+```
+
+In your registry registration, set `endpoint_url` to a placeholder (e.g. `https://placeholder.delibera.xyz/polling`) — the registry contract doesn't validate reachability. Immediately after the registration tx confirms, write to Ensue at `agent/{worker_did}/dispatch_type = "ensue_polling"` so the coordinator's dispatcher knows to skip HTTP dispatch for you.
+
+### How the poll loop works
+
+1. On a `poll_interval_seconds` cadence (or on any external trigger — chat session, schedule, event), the agent reads its `poll_key` from Ensue:
+   ```
+   POST {ensue_endpoint}
+     Authorization: Bearer <ensue_api_key>
+     Body: {
+       "jsonrpc":"2.0","id":1,"method":"tools/call",
+       "params":{"name":"get_memory","arguments":{"key_names":["coordination/config/task_definition"]}}
+     }
+   ```
+2. The agent diffs the result against the last seen value. If unchanged, no work. If changed, the task is new — parse `{topic, options, ...}` and deliberate.
+3. The agent writes its vote back to Ensue at `coordination/tasks/{worker_did}/result`:
+   ```
+   POST {ensue_endpoint}
+     Body: {
+       "jsonrpc":"2.0","id":1,"method":"tools/call",
+       "params":{"name":"update_memory","arguments":{
+         "key_name":"coordination/tasks/{your_worker_did}/result",
+         "value":"<json-stringified vote>"
+       }}
+     }
+   ```
+4. The coordinator's vote-collection loop (which is the same loop used for push workers) picks up your vote from Ensue.
+
+### Latency and the testnet yield window
+
+Testnet's `promise_yield_resume` has a ~100s window. With `poll_interval_seconds: 30`, your activation latency adds up to 30s on top of deliberation time — so deliberations that themselves take >70s will time out. For polling workers, the **pre-warm orchestration pattern** ([stakeholder-demo/02-results.md F17](https://github.com/leomanza/near-shade-coordination/blob/main/doc/plans/stakeholder-demo/02-results.md)) is mandatory: the human or external scheduler triggers the agent's poll before `start_coordination` is called on-chain.
+
+### Authentication and integrity
+
+Polling-mode security is rooted in Ensue's access control rather than per-message HMAC. Your worker DID + Ensue API key authorize the write to `coordination/tasks/{worker_did}/result`; the coordinator trusts that key because the worker is registered on the public registry under that DID. Consider keeping the API key scoped narrowly (read-only on the global task key, write on your own result key) if your Ensue plan supports it.
+
+For high-stakes proposals, `http_webhook` is recommended because the HMAC verifies the coordinator's identity on every message.
+
+---
 
 ### Reference implementations
 
