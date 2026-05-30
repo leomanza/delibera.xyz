@@ -79,6 +79,34 @@
       },
       "additionalProperties": false
     },
+    "activation": {
+      "type": "object",
+      "description": "IronClaw skill activation block — declares WHEN this skill auto-injects on incoming messages. Optional but strongly recommended (without it, IronClaw scores the skill 0 and never injects). See https://docs.ironclaw.com/capabilities/skills",
+      "properties": {
+        "keywords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Tokens that, if present in the message, score this skill high."
+        },
+        "patterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Regex patterns. A match scores the skill high."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Domain tags for cross-skill routing / grouping."
+        },
+        "exclude_keywords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Hard-skip the skill if any of these are present (prevents accidental activation)."
+        }
+      },
+      "additionalProperties": false
+    },
     "dispatch": {
       "type": "object",
       "required": ["type"],
