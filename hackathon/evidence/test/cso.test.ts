@@ -129,6 +129,47 @@ test('tally: malformed worker result aborts before settlement (never a default v
   );
 });
 
+test('tally: jury size is not fixed — 5 jurors with quorum 3', () => {
+  const five = ['a', 'b', 'c', 'd', 'e'];
+  const results = {
+    a: '{"output":{"value":1}}',
+    b: '{"output":{"value":1}}',
+    c: '{"output":{"value":1}}',
+    d: '{"output":{"value":0}}',
+    e: '{"output":{"value":0}}',
+  };
+  const t = buildTally(five, results, 3);
+  assert.equal(t.decision, 'Approved');
+  assert.equal(t.rules.approved, 3);
+  assert.equal(t.rules.rejected, 2);
+  assert.equal(t.rules.workerCount, 5);
+  assert.equal(t.rules.quorum, 3);
+});
+
+test('tally: quorum decides, not raw majority (2 of 5 is not enough for quorum 3)', () => {
+  const five = ['a', 'b', 'c', 'd', 'e'];
+  const results = {
+    a: '{"output":{"value":1}}',
+    b: '{"output":{"value":1}}',
+    c: '{"output":{"value":0}}',
+    d: '{"output":{"value":0}}',
+    e: '{"output":{"value":0}}',
+  };
+  const t = buildTally(five, results, 3);
+  assert.equal(t.decision, 'Rejected', 'a 2-2 split with one abstention does not reach quorum 3');
+  assert.equal(t.rules.approved, 2);
+  assert.equal(t.rules.quorum, 3);
+});
+
+test('tally: default quorum is a strict majority of the jury size', () => {
+  const two = ['a', 'b'];
+  const tie = buildTally(two, { a: '{"output":{"value":1}}', b: '{"output":{"value":0}}' });
+  assert.equal(tie.rules.quorum, 2);
+  assert.equal(tie.decision, 'Rejected', 'a tie does not pass a majority rule');
+  const five = ['a', 'b', 'c', 'd', 'e'];
+  assert.equal(buildTally(five, {}).rules.quorum, 3);
+});
+
 test('no-key scanner: repo is clean and .env is not tracked', () => {
   const tracked = execFileSync('git', ['ls-files'], { cwd: ROOT, encoding: 'utf8' })
     .split('\n').filter(Boolean);

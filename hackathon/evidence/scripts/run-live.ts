@@ -86,11 +86,17 @@ export async function runLive(args: {
   proposalText: string;
   labels?: string[]; // friendly names per did
   resumeOnly?: number; // finish an already-started proposal (id)
-  }): Promise<{ proposalId: number; tally: TallyDoc }> {
+  jurors?: number; // expected worker count (the contract stores it; any N ≥ 1)
+  quorum?: number; // votes needed to pass (defaults to a strict majority)
+}): Promise<{ proposalId: number; tally: TallyDoc }> {
   const { dids, proposalText, labels, resumeOnly } = args;
   if (!ensueConfigured()) fatal('ENSUE_API_KEY not set — live run is gated');
   if (!SEED_PHRASE_SET) fatal('NEAR_SEED_PHRASE not set — settlement needs the coordinator account key (keep it in .env, never echoed)');
-  if (dids.length < 3) fatal('need at least 3 worker DIDs (the demo quorum is 3)');
+  const jurors = args.jurors ?? dids.length;
+  const quorum = args.quorum ?? Math.floor(jurors / 2) + 1;
+  if (jurors < 1) fatal(`--jurors must be at least 1 (got ${jurors})`);
+  if (quorum < 1 || quorum > jurors) fatal(`--quorum must be between 1 and --jurors (got ${quorum} of ${jurors})`);
+  if (dids.length !== jurors) fatal(`--jurors ${jurors} does not match the ${dids.length} worker DIDs given`);
   if (NEAR_NETWORK === 'mainnet' && !MAINNET_FORCED) {
     fatal('NEAR_NETWORK=mainnet requires --i-understand-mainnet (product decision; testnet is the correctness venue)');
   }
@@ -98,7 +104,7 @@ export async function runLive(args: {
   let proposalId: number;
   const taskConfig = JSON.stringify({
     type: 'vote',
-    parameters: { proposal: proposalText, voting_config: { min_workers: 3, quorum: 2 } },
+    parameters: { proposal: proposalText, voting_config: { min_workers: jurors, quorum } },
     timeout: 30_000,
   });
   const configHash = createHash('sha256').update(taskConfig).digest('hex');
@@ -122,7 +128,7 @@ export async function runLive(args: {
     console.log(`  task config written (${taskConfig.length} bytes); ${dids.length} workers set pending`);
 
     step(3, 'On-chain start — start_coordination');
-    const started = await startCoordination(taskConfig, dids.length, 2);
+    const started = await startCoordination(taskConfig, jurors, quorum);
     if (started === null) fatal('contract did not open a proposal (no id bump in 15s) — check signer key against the contract');
     proposalId = started;
     await put(COORDINATOR_PROPOSAL_ID_KEY, String(proposalId));
@@ -165,7 +171,7 @@ export async function runLive(args: {
   step(7, 'Tally');
   const tally = (() => {
     try {
-      return buildTally(dids, resultsByDid);
+      return buildTally(dids, resultsByDid, quorum);
     } catch (e) {
       fatal(`RUN-LIVE ABORT: ${e instanceof Error ? e.message : String(e)}`);
     }
@@ -203,8 +209,13 @@ export async function runLive(args: {
 
 interface TallyDoc { decision: string; rules: { approved: number; rejected: number; workerCount: number; quorum: number }; timestamp: string }
 
-/** Aggregates worker votes — exported for tests (no network use). */
-export function buildTally(dids: string[], resultsByDid: Record<string, string | undefined>): TallyDoc {
+/**
+ * Aggregates worker votes — exported for tests (no network use).
+ * The decision follows the contract's quorum rule: approved >= quorum passes.
+ * With the default quorum (a strict majority) this is the majority rule.
+ */
+export function buildTally(dids: string[], resultsByDid: Record<string, string | undefined>, quorum?: number): TallyDoc {
+  const needed = quorum ?? Math.floor(dids.length / 2) + 1;
   let approved = 0;
   let rejected = 0;
   for (const did of dids) {
@@ -215,7 +226,7 @@ export function buildTally(dids: string[], resultsByDid: Record<string, string |
     const yes = r.output?.value === 1 || /^approved$/i.test(r.output?.vote || '');
     if (yes) approved++; else rejected++;
   }
-  return { decision: approved > rejected ? 'Approved' : 'Rejected', rules: { approved, rejected, workerCount: dids.length, quorum: 2 }, timestamp: new Date().toISOString() };
+  return { decision: approved >= needed ? 'Approved' : 'Rejected', rules: { approved, rejected, workerCount: dids.length, quorum: needed }, timestamp: new Date().toISOString() };
 }
 
 function printTally(t: TallyDoc, dids: string[], resultsByDid: Record<string, string | undefined>, labels?: string[]): void {
@@ -251,7 +262,7 @@ function dumpReceipt(proposalId: number, payload: Record<string, unknown>): void
   console.log(`  receipt → ${file.replace(process.cwd() + '/', '')}`);
 }
 
-/* CLI: --dids a,b,c --text "..." --labels "a,b,c" */
+/* CLI: --dids a,b,c --jurors N --quorum K --text "..." --labels "a,b,c" */
 if (process.argv[1]?.includes('run-live')) {
   void (async () => {
     const get = (name: string) => { const a = process.argv.find((x) => x === `--${name}`); return a ? process.argv[process.argv.indexOf(a) + 1] : undefined; };
@@ -259,9 +270,13 @@ if (process.argv[1]?.includes('run-live')) {
     const labels = get('labels')?.split(',');
     const resumeOnlyArg = get('resume-only');
     const resumeOnly = resumeOnlyArg ? Number(resumeOnlyArg) : undefined;
-    const text = get('text') || 'Renewal case (demo transcript replay): an owner policy refused a $0.01 payment to ac-owner.delibera.near (whitelist only). A private jury of 3 agents re-reviewed; should this payment have been allowed?';
-    if (dids.length < 3) fatal('usage: npm run live:testnet -- --dids did1,did2,did3 [--labels n1,n2,n3] [--text "..."] [--resume-only <proposalId>]');
-    const out = await runLive({ dids, proposalText: text, labels, resumeOnly });
+    const jurorsArg = get('jurors');
+    const jurors = jurorsArg ? Number(jurorsArg) : undefined;
+    const quorumArg = get('quorum');
+    const quorum = quorumArg ? Number(quorumArg) : undefined;
+    const text = get('text') || 'Renewal case (demo transcript replay): an owner policy refused a $0.01 payment to ac-owner.delibera.near (whitelist only). A private jury of agents re-reviewed; should this payment have been allowed?';
+    if (dids.length < 1) fatal('usage: npm run live:testnet -- --dids did1,did2,did3 [--jurors N] [--quorum K] [--labels n1,n2,n3] [--text "..."] [--resume-only <proposalId>]');
+    const out = await runLive({ dids, proposalText: text, labels, resumeOnly, jurors, quorum });
     process.exit(0); // reaching here means full success — every failure path is fatal()
   })();
 }
