@@ -3,7 +3,8 @@
     "capturedAt": "2026-11-08T23:35:22.693Z",
     "network": "testnet",
     "contract": "coordinator.agents-coordinator.testnet",
-    "kind": "live-run"
+    "kind": "live-run",
+    "stateVerifiedAt": "2026-11-11 \u2014 re-read from the contract: state Finalized, 3 submissions, tally Rejected 0-3"
   },
   "taskConfig": "{\"type\":\"vote\",\"parameters\":{\"proposal\":\"Renewal case (demo transcript replay): an owner policy refused a $0.01 payment to ac-owner.delibera.near (whitelist only). A private jury of 3 agents re-reviewed; should this payment have been allowed?\",\"voting_config\":{\"min_workers\":3,\"quorum\":2}},\"timeout\":30000}",
   "tally": {
@@ -69,29 +70,29 @@
     ],
     "task_config": "{\"type\":\"vote\",\"parameters\":{\"proposal\":\"Renewal case (demo transcript replay): an owner policy refused a $0.01 payment to ac-owner.delibera.near (whitelist only). A private jury of 3 agents re-reviewed; should this payment have been allowed?\",\"voting_config\":{\"min_workers\":3,\"quorum\":2}},\"timeout\":30000}",
     "config_hash": "9aa207512fd6127475327e3ea91c2edd5f395be89a76c0c0bf115242009be448",
-    "timestamp": 1794180906143895300,
+    "timestamp": 1794180906143895267,
     "requester": "agents-coordinator.testnet",
-    "state": "WorkersCompleted",
+    "state": "Finalized",
     "expected_worker_count": 3,
     "quorum": 2,
     "worker_submissions": [
       {
         "worker_id": "did:key:z6MkuLv3ysAUfL2nRRPUVdsxNbZqukfwBUd9eS7dzd1WWqYv",
         "result_hash": "5f8afaaeb20e0e940936c0b50a6e199e2484d926b428e562dcec3f51895d4a4b",
-        "timestamp": 1794180914304917200
+        "timestamp": 1794180914304917313
       },
       {
         "worker_id": "did:key:z6MktUzP9U4gmN5RABfdRBmjfwtXuyqtk76kMW4RSJat1ftZ",
         "result_hash": "dc2b85e68ebbed1e2b5d1150f8bc6d392229d4ba638e34f69c71837adb352779",
-        "timestamp": 1794180914304917200
+        "timestamp": 1794180914304917313
       },
       {
         "worker_id": "did:key:z6Mkpp7u6Nnp86vX79LnRFKmLcxLnhA1geQXtvqgdATE6TsY",
         "result_hash": "8db001013402fac40f4233ba542535a760ff9626a00c00ce3e472e4040fde997",
-        "timestamp": 1794180914304917200
+        "timestamp": 1794180914304917313
       }
     ],
-    "finalized_result": null
+    "finalized_result": "{\"aggregatedValue\":0,\"approved\":0,\"rejected\":3,\"decision\":\"Rejected\",\"workerCount\":3,\"timestamp\":\"2026-11-08T23:35:17.220Z\",\"proposalId\":76}"
   },
-  "finalized": null
+  "finalized": "{\"aggregatedValue\":0,\"approved\":0,\"rejected\":3,\"decision\":\"Rejected\",\"workerCount\":3,\"timestamp\":\"2026-11-08T23:35:17.220Z\",\"proposalId\":76}"
 }
