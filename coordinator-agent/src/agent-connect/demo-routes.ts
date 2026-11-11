@@ -135,7 +135,7 @@ demoRoutes.post('/demo/session', async (c) => {
     policy = {
       revision: 3, // pre-ratification narrative — ratify bumps to the real rev 4
       status: 'APPLIED', provider_policy_synced: true,
-      destinations: { mode: 'only', list: [{ action: 'transfer', address: ORACLE, confidential: 'true' }] },
+      destinations: { mode: 'only', list: [{ action: 'transfer', address: ORACLE, confidential: true }] },
       policy_hash: null, applied_at: 'replay of 2026-10-19 policy lineage',
       usage: { budget: { daily: RECEIPTS.policy.dailyBudget } },
     };
