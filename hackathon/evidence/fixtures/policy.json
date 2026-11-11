@@ -1,0 +1,40 @@
+{
+  "meta": {
+    "capturedAt": "2026-10-19T21:17:54.799Z",
+    "label": "owner-signed spending policy, revision 4 — enforced by the Agent Connect API before dispatch",
+    "network": "mainnet rail (Agent Connect); provider confirmed sync (providerPolicySynced: true)",
+    "source": "delibera demo run, 2026-10-19"
+  },
+  "view": {
+    "revision": 4,
+    "policyHash": "a435476dd5b4f903c1b5e91f3c732ac66d976ec4355684af0293c04169d3e3ed",
+    "status": "APPLIED",
+    "providerPolicySynced": true,
+    "appliedAt": "2026-10-19T21:17:54.799Z",
+    "dailyBudget": { "limitUsd": "0.20", "spentUsd": "0.019998", "remainingUsd": "0.180002" }
+  },
+  "document": {
+    "frozen": false,
+    "actions": ["transfer"],
+    "confidential": true,
+    "owner_approval": false,
+    "assets": ["nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1"],
+    "limits": {
+      "per_transaction": {
+        "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1": "100000"
+      }
+    },
+    "max_actions_per_hour": 20,
+    "destinations": {
+      "mode": "only",
+      "list": [{ "action": "transfer", "address": "ac-oracle.delibera.near", "confidential": true }]
+    },
+    "budget": { "daily_usd": "0.20", "weekly_usd": null, "monthly_usd": "0.20" },
+    "timelock_ms": 0
+  },
+  "postRatification": {
+    "description": "After verdict #74 + one NEP-413 owner signature the vendor destination was added; the whitelist (`only` mode) remains the gate.",
+    "destinationsAdded": ["ac-owner.delibera.near"]
+  },
+  "note": "The whitelist IS the gate: no owner_approval exception, and the API checks destinations before dispatch — refusing with 403 policy_destination_denied."
+}

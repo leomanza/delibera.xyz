@@ -1,0 +1,97 @@
+{
+  "meta": {
+    "capturedAt": "2026-11-08T23:35:22.693Z",
+    "network": "testnet",
+    "contract": "coordinator.agents-coordinator.testnet",
+    "kind": "live-run"
+  },
+  "taskConfig": "{\"type\":\"vote\",\"parameters\":{\"proposal\":\"Renewal case (demo transcript replay): an owner policy refused a $0.01 payment to ac-owner.delibera.near (whitelist only). A private jury of 3 agents re-reviewed; should this payment have been allowed?\",\"voting_config\":{\"min_workers\":3,\"quorum\":2}},\"timeout\":30000}",
+  "tally": {
+    "decision": "Rejected",
+    "rules": {
+      "approved": 0,
+      "rejected": 3,
+      "workerCount": 3,
+      "quorum": 2
+    },
+    "timestamp": "2026-11-08T23:35:15.109Z"
+  },
+  "submissions": [
+    {
+      "worker_id": "did:key:z6MkuLv3ysAUfL2nRRPUVdsxNbZqukfwBUd9eS7dzd1WWqYv",
+      "result_hash": "5f8afaaeb20e0e940936c0b50a6e199e2484d926b428e562dcec3f51895d4a4b"
+    },
+    {
+      "worker_id": "did:key:z6MktUzP9U4gmN5RABfdRBmjfwtXuyqtk76kMW4RSJat1ftZ",
+      "result_hash": "dc2b85e68ebbed1e2b5d1150f8bc6d392229d4ba638e34f69c71837adb352779"
+    },
+    {
+      "worker_id": "did:key:z6Mkpp7u6Nnp86vX79LnRFKmLcxLnhA1geQXtvqgdATE6TsY",
+      "result_hash": "8db001013402fac40f4233ba542535a760ff9626a00c00ce3e472e4040fde997"
+    }
+  ],
+  "aggregatedResult": "{\"aggregatedValue\":0,\"approved\":0,\"rejected\":3,\"decision\":\"Rejected\",\"workerCount\":3,\"timestamp\":\"2026-11-08T23:35:17.220Z\",\"proposalId\":76}",
+  "resultHash": "d9fc620ed2d11c904dc2cd31d5dda5af41295210908e07005cbc4384d5218c87",
+  "proposal": {
+    "yield_id": [
+      15,
+      49,
+      25,
+      3,
+      195,
+      119,
+      194,
+      185,
+      118,
+      72,
+      172,
+      136,
+      197,
+      169,
+      2,
+      129,
+      108,
+      20,
+      228,
+      68,
+      249,
+      56,
+      137,
+      163,
+      135,
+      42,
+      153,
+      210,
+      110,
+      79,
+      210,
+      219
+    ],
+    "task_config": "{\"type\":\"vote\",\"parameters\":{\"proposal\":\"Renewal case (demo transcript replay): an owner policy refused a $0.01 payment to ac-owner.delibera.near (whitelist only). A private jury of 3 agents re-reviewed; should this payment have been allowed?\",\"voting_config\":{\"min_workers\":3,\"quorum\":2}},\"timeout\":30000}",
+    "config_hash": "9aa207512fd6127475327e3ea91c2edd5f395be89a76c0c0bf115242009be448",
+    "timestamp": 1794180906143895300,
+    "requester": "agents-coordinator.testnet",
+    "state": "WorkersCompleted",
+    "expected_worker_count": 3,
+    "quorum": 2,
+    "worker_submissions": [
+      {
+        "worker_id": "did:key:z6MkuLv3ysAUfL2nRRPUVdsxNbZqukfwBUd9eS7dzd1WWqYv",
+        "result_hash": "5f8afaaeb20e0e940936c0b50a6e199e2484d926b428e562dcec3f51895d4a4b",
+        "timestamp": 1794180914304917200
+      },
+      {
+        "worker_id": "did:key:z6MktUzP9U4gmN5RABfdRBmjfwtXuyqtk76kMW4RSJat1ftZ",
+        "result_hash": "dc2b85e68ebbed1e2b5d1150f8bc6d392229d4ba638e34f69c71837adb352779",
+        "timestamp": 1794180914304917200
+      },
+      {
+        "worker_id": "did:key:z6Mkpp7u6Nnp86vX79LnRFKmLcxLnhA1geQXtvqgdATE6TsY",
+        "result_hash": "8db001013402fac40f4233ba542535a760ff9626a00c00ce3e472e4040fde997",
+        "timestamp": 1794180914304917200
+      }
+    ],
+    "finalized_result": null
+  },
+  "finalized": null
+}

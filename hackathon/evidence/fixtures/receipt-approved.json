@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "capturedAt": "2026-10-19",
+    "network": "NEAR mainnet (Agent Connect rail, USDC native 6-decimals atomic strings)",
+    "source": "delibera demo run — the APPROVED leg of the two-run demo"
+  },
+  "oraclePayment": {
+    "correlationId": "op_znmV72z58DUDuzbF7WmihhMLTiCm8aGL3C_KnUmKF_A",
+    "action": "confidential_transfer",
+    "provider": "outlayer",
+    "providerStatus": "success",
+    "amountAtomic": "10000",
+    "intentHash": "FMhVyes17dTzH2QSnLRie6cjNxhTzKJaPj2YpQfpxhDW",
+    "depositAddress": "5d06ea0d0ed987bf80d40e688a3c84154fe7abdbddbd1944ce83a71a7826e675",
+    "timeline": [
+      { "status": "PENDING", "at": "2026-10-19T19:53:25.208Z" },
+      { "status": "PROCESSING", "at": "2026-10-19T19:53:26.233Z", "label": "dispatch committed" },
+      { "status": "SUCCESS", "at": "2026-10-19T19:53:48.123Z", "label": "provider settled" }
+    ]
+  },
+  "vendorPayment": {
+    "correlationId": "op_XqAFcciijdn1s7ftjMfUBRZ2Z3ejkrH6bk247QS_Pqw",
+    "action": "intents_transfer",
+    "provider": "outlayer",
+    "providerStatus": "success",
+    "amountAtomic": "10000",
+    "intentHash": "1YVrHHsq2QnzWQKb9Y8199AF75SGwabig3VZWak7i43",
+    "timeline": [
+      { "status": "PENDING", "at": "2026-10-19T21:17:55.689Z" },
+      { "status": "PROCESSING", "at": "2026-10-19T21:17:56.555Z", "label": "dispatch committed" },
+      { "status": "UNCERTAIN", "at": "2026-10-19T21:18:00.000Z", "label": "maybe executed — poll, never resubmit" },
+      { "status": "SUCCESS", "at": "2026-10-19T21:19:42.243Z", "label": "intents_transfer settled" }
+    ]
+  },
+  "signature": {
+    "standard": "nep413",
+    "tag": "2147484061",
+    "sha256": true,
+    "recipient": "api.demo.agentsonintents.com",
+    "nonceBytes": 32,
+    "replayed": true,
+    "message": "[delibera demo] Add ac-owner.delibera.near to the destinations of agent c6b8a14d6b2fdd22e6a8c5182955f1dbca86453d71de4ce3e6cf8c96613ed889 — policy revision 4. Approved by council verdict #74."
+  },
+  "note": "message is the faithful template of the ratification the demo replayed; live bytes flow only on the live path (signature construction is verified byte-for-byte by scripts/verify-signing.ts)."
+}

@@ -1,0 +1,43 @@
+{
+  "meta": {
+    "capturedAt": "2026-10-19T21:17:02.569Z",
+    "settlement": { "contract": "coordinator.agents-coordinator.testnet", "label": "testnet-capture — mainnet precedent pending, see scripts/verify-settlement.ts" },
+    "paymentRail": "NEAR mainnet (Agent Connect, USDC native; explorer receipts)",
+    "source": "Delibera coordinator, real council run over Ensue"
+  },
+  "proposal": {
+    "proposalId": 74,
+    "text": "Pay vendor.near 20 USDC for the completed Q3 community-docs security review. Deliverable published and verified, two milestones met on time, final report attached, amount matches the approved quote."
+  },
+  "tally": {
+    "state": "Finalized",
+    "decision": "Approved",
+    "approved": 3,
+    "rejected": 0,
+    "workerCount": 3,
+    "quorum": 2,
+    "minWorkers": 3,
+    "settledAt": "2026-10-19T21:17:02.569Z"
+  },
+  "jurors": [
+    {
+      "name": "Juror 1",
+      "did": "did:key:z6Mkpp7u6Nnp86vX79LnRFKmLcxLnhA1geQXtvqgdATE6TsY",
+      "resultHash": "1b7fdc32cddbc0705b5be6a32f54827eb96debff244d1e237df3ec9c938c8368",
+      "vote": "Approved"
+    },
+    {
+      "name": "Juror 2",
+      "did": "did:key:z6MkuLv3ysAUfL2nRRPUVdsxNbZqukfwBUd9eS7dzd1WWqYv",
+      "resultHash": "e182a3ad8cbf28f67e186ac634455671ce8a64efb6b8333808ff805785b23c87",
+      "vote": "Approved"
+    },
+    {
+      "name": "Juror 3",
+      "did": "did:key:z6MktUzP9U4gmN5RABfdRBmjfwtXuyqtk76kMW4RSJat1ftZ",
+      "resultHash": "81938681ae45ca9d7cca13124b2590c10db5aeaa0214eecf39e1bedafa6d8790",
+      "vote": "Approved"
+    }
+  ],
+  "note": "Each resultHash commits the juror's result JSON; the verbatim reasoning stayed private (held by the run's Ensue record). The reasoning streamed by the demo for this proposal is reconstructed narrative (flagged replay) — the settled receipts are these DIDs + hashes, not the narrative."
+}

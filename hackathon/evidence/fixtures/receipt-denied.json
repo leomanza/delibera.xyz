@@ -1,0 +1,22 @@
+{
+  "meta": {
+    "capturedAt": "2026-10-19",
+    "network": "Agent Connect API — pre-dispatch check",
+    "label": "THE GUARDRAIL BITE — refusal issued by the provider, not by demo code"
+  },
+  "request": {
+    "agentId": "c6b8a14d6b2fdd22e6a8c5182955f1dbca86453d71de4ce3e6cf8c96613ed889",
+    "action": "intents_transfer",
+    "recipient": "ac-owner.delibera.near",
+    "amountAtomic": "10000",
+    "confidential": false,
+    "assetId": "nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1"
+  },
+  "refusal": {
+    "http": 403,
+    "code": "policy_destination_denied",
+    "layer": "owner-signed destinations — checked by the Agent Connect API before dispatch",
+    "message": "ac-owner.delibera.near is not on the owner-signed whitelist"
+  },
+  "replayNote": "Only an owner-signed policy_update opens a destination. Replaying with the same key returns the original refusal; a new key cannot bypass it either."
+}
