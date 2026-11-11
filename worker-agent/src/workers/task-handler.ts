@@ -193,6 +193,10 @@ export async function executeTask(taskConfig: TaskConfig): Promise<void> {
     console.log(`[worker] Work completed in ${processingTime}ms`);
 
     // Step 3: Build worker result
+    // The TEE proof travels INSIDE the result: the on-chain result_hash commits
+    // to these exact bytes, so the sealed commitment binds the reasoning to the
+    // TEE attestation that produced it. A separate key would let a juror swap
+    // its proof without changing the commitment.
     const workerResult: WorkerResult = {
       workerId: workerDID,  // DID is now the worker identity
       taskType: taskConfig.type,
@@ -208,11 +212,16 @@ export async function executeTask(taskConfig: TaskConfig): Promise<void> {
       processingTime,
     };
 
+    if (result.verificationProof) {
+      workerResult.verificationProof = result.verificationProof;
+    }
+
     // Step 4: Write result to Ensue (DID-keyed path)
     await getEnsueClient().updateMemory(workerKeys.RESULT, JSON.stringify(workerResult));
     console.log(`[worker] Result written to Ensue`);
 
-    // Step 4b: Store verification proof in Ensue (if available)
+    // Step 4b: Store verification proof in Ensue (if available) — a copy at its
+    // own key, for readers who want the proof without the reasoning.
     if (result.verificationProof) {
       await getEnsueClient().updateMemory(
         workerKeys.VERIFICATION_PROOF,

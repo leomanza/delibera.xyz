@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { buildCapsule } from '../src/capsule.js';
 import { parseEnsueResponse } from '../src/ensue.js';
 import { loadProposal74, loadReceipt } from '../src/verdict-fixture.js';
-import { buildTally } from '../scripts/run-live.js';
+import { buildTally, extractResultJson } from '../scripts/run-live.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -168,6 +168,31 @@ test('tally: default quorum is a strict majority of the jury size', () => {
   assert.equal(tie.decision, 'Rejected', 'a tie does not pass a majority rule');
   const five = ['a', 'b', 'c', 'd', 'e'];
   assert.equal(buildTally(five, {}).rules.quorum, 3);
+});
+
+test('result extraction: the memory envelope is unwrapped to the result document', () => {
+  const resultDoc = '{"workerId":"did:key:zX","taskType":"vote","output":{"value":1,"vote":"Approved","reasoning":"r"}}';
+  const envelope = JSON.stringify({ failed: 0, results: [{ value: resultDoc }], succeeded: 1, total: 1 });
+  assert.equal(extractResultJson(envelope), resultDoc);
+  // A snapshot of the envelope one level deeper (what the coordinator writes
+  // under proposals/<id>/workers/<did>/result) must unwrap to the same doc.
+  const nested = JSON.stringify({ failed: 0, results: [{ value: envelope }], succeeded: 1, total: 1 });
+  assert.equal(extractResultJson(nested), resultDoc);
+  // A bare result document is returned unchanged.
+  assert.equal(extractResultJson(resultDoc), resultDoc);
+});
+
+test('tally: a wrapped result is tallied by its VOTE, not counted as a rejection', () => {
+  // This is the regression that produced the wrong on-chain verdict: the
+  // envelope was parsed as if it were the result document, so every juror
+  // looked like "no vote" and was counted as a rejection.
+  const resultDoc = '{"workerId":"did:key:zX","output":{"value":1,"vote":"Approved"}}';
+  const envelope = JSON.stringify({ failed: 0, results: [{ value: resultDoc }] });
+  const extracted = extractResultJson(envelope);
+  const t = buildTally(['a'], { a: extracted }, 1);
+  assert.equal(t.rules.approved, 1);
+  assert.equal(t.rules.rejected, 0);
+  assert.equal(t.decision, 'Approved');
 });
 
 test('no-key scanner: repo is clean and .env is not tracked', () => {

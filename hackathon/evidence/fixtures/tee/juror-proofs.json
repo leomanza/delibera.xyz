@@ -1,0 +1,40 @@
+{
+  "capturedAt": "2026-11-08T23:35Z (the live testnet run #76); re-captured 2026-11-11",
+  "source": "Ensue memory coordination/tasks/<did>/verification_proof (worker-agent), read back live",
+  "note": "The original capture path did not keep the signed text or the request/response bytes, and the attestation it stored was empty (the API response shape had changed). The signed payload is reconstructed here from the two hashes; the bytes are gone, so the hash-level comparison cannot be redone — the signature itself can, and it binds the hashes to the TEE key.",
+  "proofs": [
+    {
+      "workerId": "did:key:z6MkuLv3ysAUfL2nRRPUVdsxNbZqukfwBUd9eS7dzd1WWqYv",
+      "model": "deepseek/deepseek-v3.2",
+      "chat_id": "0bb9976d808d4ddc8cb1a02711870024",
+      "text": "827cb4660e74ac2e4aca4b8e8a5893809c2a608c8c8082948493f35d0d947e08:73800c06a9e730d59ab9e8f8523eedb6e5b4e45d652f8b6185fea2ed695e23ba",
+      "request_hash": "827cb4660e74ac2e4aca4b8e8a5893809c2a608c8c8082948493f35d0d947e08",
+      "response_hash": "73800c06a9e730d59ab9e8f8523eedb6e5b4e45d652f8b6185fea2ed695e23ba",
+      "signature": "0xcea02029b20abb6aac70a1c76570601e680ee15b75d228d062bcd826da2b48b62d81d53e00e28b8840ca1b6e365289d3f3a9b22d9301f0a1bb782dc0e8e2af891c",
+      "signing_address": "0xb98a789cdc4817275f5155593ba73ef2a957e779",
+      "signing_algo": "ecdsa"
+    },
+    {
+      "workerId": "did:key:z6MktUzP9U4gmN5RABfdRBmjfwtXuyqtk76kMW4RSJat1ftZ",
+      "model": "deepseek/deepseek-v3.2",
+      "chat_id": "ea229ed3953d4edbbbde657008ce5a33",
+      "text": "785d02cd3b6d5f4e0e74aed01a5798a5828f929d4a50d5ac69aa3efff478d358:60c0a882c38ceb063c125f6f9e9d1cebb5478d785857fcc1774cc1d50e45ba7b",
+      "request_hash": "785d02cd3b6d5f4e0e74aed01a5798a5828f929d4a50d5ac69aa3efff478d358",
+      "response_hash": "60c0a882c38ceb063c125f6f9e9d1cebb5478d785857fcc1774cc1d50e45ba7b",
+      "signature": "0x41090a1a5484dbb486e6d9359b3ec38bff67ab04b00c39cbe6e41938b5a837d7479b9e38767fdc8de13b6f1273d15778c0cf7f05432f9363b702f37ea4c282c21c",
+      "signing_address": "0xb98a789cdc4817275f5155593ba73ef2a957e779",
+      "signing_algo": "ecdsa"
+    },
+    {
+      "workerId": "did:key:z6Mkpp7u6Nnp86vX79LnRFKmLcxLnhA1geQXtvqgdATE6TsY",
+      "model": "deepseek/deepseek-v3.2",
+      "chat_id": "4e88b8df8b1b4f7f8ed218d248531f2f",
+      "text": "b734f2d4c7b8a2475caaabe78b975758248a1db6b04f0f780fe2871b5e35d129:9f627a58c2cadcd7a073090944ddf6f7d70f238aa27ab8aafaea3152f7ee0c72",
+      "request_hash": "b734f2d4c7b8a2475caaabe78b975758248a1db6b04f0f780fe2871b5e35d129",
+      "response_hash": "9f627a58c2cadcd7a073090944ddf6f7d70f238aa27ab8aafaea3152f7ee0c72",
+      "signature": "0x38a3b9fcedbd8336376cec15a489189c63fcc83f304f7f69329fd3ea2b7a8e7547e3d0114b6af3861ad5500580b4e886ba041b7e59b283e14e88627e54242b891b",
+      "signing_address": "0xb98a789cdc4817275f5155593ba73ef2a957e779",
+      "signing_algo": "ecdsa"
+    }
+  ]
+}

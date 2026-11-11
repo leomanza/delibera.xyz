@@ -71,6 +71,29 @@ async function readStatus(did: string): Promise<string | undefined> {
 
 interface WorkerResultDoc { workerId?: string; output?: { value?: number; vote?: string }; }
 
+/* Trusted boundary: the memory store's envelope. The result document lives in
+ * results[0].value; some keys store that envelope one level deeper. */
+interface Envelope { failed?: number; results?: Array<{ value?: string }> }
+
+export function extractResultJson(raw: string): string {
+  let current: unknown = raw;
+  for (let depth = 0; depth < 4; depth++) {
+    if (typeof current !== 'string') break;
+    let parsed: unknown;
+    try { parsed = JSON.parse(current); } catch { break; }
+    const env = parsed as Envelope;
+    const value = env?.results?.[0]?.value;
+    // The result document itself has an "output" field; the envelope does not.
+    if (typeof value === 'string' && !(parsed as { output?: unknown }).output) {
+      current = value;
+      continue;
+    }
+    current = parsed;
+    break;
+  }
+  return typeof current === 'string' ? current : JSON.stringify(current);
+}
+
 /* Trusted boundary: worker output is the JSON string fetched from Ensue.
  * Unparsable bytes are evidence-tampering, not a default-vote. */
 function parseWorkerResult(raw: string): WorkerResultDoc | null {
@@ -156,10 +179,15 @@ export async function runLive(args: {
   const resultsByDid: Record<string, string | undefined> = {};
   for (const did of dids) {
     const raw = await ensue.get(workerKeys(did).RESULT);
-    resultsByDid[did] = raw ?? undefined;
     if (!raw) fatal(`no result for ${did}`);
-    const workerId = parseWorkerResult(raw)?.workerId ?? did; // key path is the source of truth (IronClaw pattern)
-    submissions.push({ worker_id: workerId, result_hash: createHash('sha256').update(raw).digest('hex') });
+    // The memory read returns the storage ENVELOPE ({ failed, results:[{ value }] }).
+    // The result document — the thing we tally and the thing we commit to — is
+    // the value inside it. Tallying the envelope itself would read every vote
+    // as "no vote" and count it as a rejection.
+    const resultJson = extractResultJson(raw);
+    resultsByDid[did] = resultJson;
+    const workerId = parseWorkerResult(resultJson)?.workerId ?? did; // key path is the source of truth (IronClaw pattern)
+    submissions.push({ worker_id: workerId, result_hash: createHash('sha256').update(resultJson).digest('hex') });
   }
   for (const s of submissions) console.log(`  ${s.worker_id.slice(0, 22)}… resultHash ${s.result_hash.slice(0, 16)}…`);
 

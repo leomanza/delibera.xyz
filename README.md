@@ -87,6 +87,7 @@ git log --oneline pre-hackathon..hackathon
 | **The verdict oracle seam** — proposal in → verdict card out, settlement untouched | `coordinator-agent/src/agent-connect/verdict-oracle.ts` |
 | **The evidence harness** — judge sequence, capsule (`cso-capsule/1`), offline digest verifier, no-key scanner, 18 invariant tests | `hackathon/evidence/` |
 | **A live end-to-end precedent on testnet** — proposal #76: 3 real jurors voted independently, `record_worker_submissions` + `coordinator_resume` settled on-chain, each juror's `sha256(result)` cross-checked against the contract's `result_hash` | `hackathon/evidence/fixtures/live-testnet/proposal-76.json` |
+| **TEE proof for the jurors' reasoning** — the NEAR AI Cloud signature of each juror's reply is verified with **NEAR's own official verifier**, and the signing key is shown to be bound to genuine Intel TDX hardware | `npm run verify:tee` in `hackathon/evidence` |
 | **Jury size as a parameter** — `--jurors N --quorum K`; the contract already stored `expected_worker_count`/`quorum` | `hackathon/evidence/scripts/run-live.ts` |
 
 **Baseline** (pre-window, reused and disclosed per the rules — own libraries
@@ -165,6 +166,57 @@ What a live run proves, and what it does not:
 - **Does not yet prove:** a mainnet settlement (the mainnet coordinator account
   is not ours to sign for — that receipt is honestly marked "omitted until
   live", not faked).
+
+### Known issue in precedent #76 (disclosed, not hidden)
+
+The tally that #76 settled on-chain (`Rejected 0-3`) is **wrong**. The harness
+parsed the memory *envelope* instead of the result document, so every juror
+looked like "no vote" and was counted as a rejection. Re-reading the same live
+bytes from Ensue with the fixed parser gives **Approved 3-0** — all three jurors
+voted `Approved`. The contract only accepts a resume from `WorkersCompleted`, so
+#76 cannot be amended; a later run settles the correct tally.
+
+The bug is fixed (`extractResultJson()` in `hackathon/evidence/scripts/run-live.ts`)
+and pinned by two tests, and the receipt carries the whole story in its
+`knownIssue` note. We would rather show the judge a disclosed bug than a tidy
+lie.
+
+---
+
+## TEE proof — the reasoning came from real hardware
+
+```sh
+cd hackathon/evidence
+npm run verify:tee
+```
+
+```
+did:key:z6MkuLv3ysAUfL…  model deepseek/deepseek-v3.2
+   chat signature valid : YES   (key 0xb98a789cdc…)
+   Intel TDX quote      : VERIFIED · report_data binds the signing key
+   GPU verdict (server) : PASS · tcb UpToDate · provider chutes
+...
+TEE TEE PROOF VERIFIED — 3/3 signatures valid, 3/3 keys bound to Intel TDX hardware
+```
+
+NEAR AI Cloud signs the exact request/response bytes with the key of the TEE
+that served the model. We check that with **NEAR's own official verifier**
+(`nearai-cloud-verifier`): the ECDSA signature is verified over the signed
+payload, and a fresh Intel TDX quote is fetched for that signing key and
+verified locally — its `report_data` binds the key *and* a fresh nonce, so the
+quote cannot be replayed against another key or a stale request. The
+attestation fetch is non-billable and needs no API key, so the check costs
+nothing and exposes no secret.
+
+What we do **not** claim: the NVIDIA GPU attestation is *reported* by the API
+(`gpu_verdict: PASS`, `tcb_status: UpToDate`, certificates attached) rather than
+re-verified locally, because the alpha verifier expects an older payload shape
+than the API returns today. And the request/response bytes of the #76 run were
+not retained, so the hash-level comparison cannot be redone for that run — the
+signature can, and it binds the hashes to the TEE key. The capture path in
+`worker-agent` now keeps the bytes, the signed text verbatim, and the proof
+**inside** the sealed result, so the on-chain commitment binds the TEE proof to
+the reasoning.
 
 ---
 

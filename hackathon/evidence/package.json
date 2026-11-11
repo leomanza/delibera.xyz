@@ -13,14 +13,16 @@
     "verify:settlement": "tsx scripts/verify-settlement.ts",
     "verify:ensue74": "tsx scripts/verify-ensue-74.ts",
     "live:testnet": "tsx scripts/run-live.ts",
-    "test": "node --import tsx --test test/*.test.ts"
+    "test": "node --import tsx --test test/*.test.ts",
+    "verify:tee": "tsx scripts/verify-near-ai-tee.ts"
   },
   "dependencies": {
     "@near-js/crypto": "^2.5.1",
     "@near-js/providers": "^2.5.1",
     "@near-js/transactions": "^2.5.1",
     "near-api-js": "^5.1.1",
-    "near-seed-phrase": "^0.2.1"
+    "near-seed-phrase": "^0.2.1",
+    "nearai-cloud-verifier": "^0.0.1-alpha.1"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

@@ -22,15 +22,42 @@ export interface AiVoteResult extends VoteResult {
   verificationProof?: VerificationProof;
 }
 
+/** Wire bytes of the chat call — needed to re-verify the response signature offline. */
+export interface CapturedExchange {
+  requestBody: string; // exact bytes sent
+  responseBody: string; // exact bytes received
+}
+
+/**
+ * Wrap fetch so we keep the exact request/response bytes of the completion.
+ * NEAR AI signs "sha256(requestBytes):sha256(responseBytes)" — without the
+ * bytes, the signature can be checked but the hashes cannot be re-derived.
+ */
+function capturingFetch(captured: CapturedExchange): typeof fetch {
+  return async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    const res = await fetch(input, init);
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    if (typeof init?.body === 'string' && url.includes('/chat/completions')) {
+      captured.requestBody = init.body;
+    }
+    const clone = res.clone();
+    const text = await clone.text();
+    if (url.includes('/chat/completions')) captured.responseBody = text;
+    return res;
+  };
+}
+
 export async function aiVote(manifesto: string, proposal: string, agentContext?: string): Promise<AiVoteResult> {
   const apiKey = process.env.NEAR_AI_API_KEY || process.env.NEAR_API_KEY;
   if (!apiKey) {
     throw new Error('NEAR_AI_API_KEY or NEAR_API_KEY environment variable is not set');
   }
 
+  const captured: CapturedExchange = { requestBody: '', responseBody: '' };
   const openai = new OpenAI({
     baseURL: 'https://cloud-api.near.ai/v1',
     apiKey,
+    fetch: capturingFetch(captured),
   });
 
   let userMessage = '';
@@ -93,11 +120,23 @@ export async function aiVote(manifesto: string, proposal: string, agentContext?:
   if (chatId) {
     try {
       verificationProof = await fetchVerificationProof(chatId, model, apiKey);
+      // Keep the exact signed payload and the wire bytes, so the signature can
+      // be re-verified offline (the hashes alone cannot reproduce the text).
+      (verificationProof as VerificationProof & { text?: string; request_body?: string; response_body?: string }).text =
+        `${verificationProof.request_hash}:${verificationProof.response_hash}`;
+      if (captured.requestBody) {
+        (verificationProof as VerificationProof & { request_body?: string }).request_body = captured.requestBody;
+      }
+      if (captured.responseBody) {
+        (verificationProof as VerificationProof & { response_body?: string }).response_body = captured.responseBody;
+      }
 
-      // Fetch model attestation to link signing_address to TEE hardware
+      // Fetch model attestation to link signing_address to TEE hardware.
+      // Scoped to the key that signed this chat, so the attestation binds to
+      // THIS inference and not to some other serving key.
       if (verificationProof) {
         try {
-          const attestation = await fetchModelAttestation(model, apiKey);
+          const attestation = await fetchModelAttestation(model, apiKey, verificationProof.signing_address);
           verificationProof.attestation = attestation;
         } catch (e) {
           console.warn('[ai-voter] Failed to fetch model attestation (non-critical):', e);
@@ -120,7 +159,10 @@ export async function aiVote(manifesto: string, proposal: string, agentContext?:
  * See: https://docs.near.ai/cloud/verification/chat
  *
  * The proof contains:
- * - text: "request_hash:response_hash" signed by the TEE running the model
+ * - text: the signed payload. For the `gateway` signature kind it is
+ *   "request_hash:response_hash"; for `provider_tee` it is
+ *   "{model_id}:{request_hash}:{response_hash}". Kept VERBATIM here — it is
+ *   what the signature covers, so it must not be reconstructed later.
  * - signature: ECDSA signature verifiable with ethers.verifyMessage()
  * - signing_address: TEE public key unique to the model
  *
@@ -146,10 +188,14 @@ async function fetchVerificationProof(
     signature: string;
     signing_address: string;
     signing_algo: string;
+    signature_kind?: string;
   };
 
-  // text format is "request_hash:response_hash"
-  const [requestHash, responseHash] = sig.text.split(':');
+  // "request_hash:response_hash" (gateway) or "{model}:{req}:{res}" (provider_tee).
+  // The last two segments are the hashes in both shapes.
+  const parts = sig.text.split(':');
+  const requestHash = parts.length >= 3 ? parts[parts.length - 2] : parts[0];
+  const responseHash = parts.length >= 3 ? parts[parts.length - 1] : parts[1];
 
   return {
     chat_id: chatId,
@@ -160,7 +206,7 @@ async function fetchVerificationProof(
     signing_address: sig.signing_address,
     signing_algo: sig.signing_algo,
     timestamp: Date.now(),
-  };
+  } as VerificationProof;
 }
 
 /**
@@ -168,16 +214,23 @@ async function fetchVerificationProof(
  * Links the signing_address back to verified TEE hardware (Intel TDX / NVIDIA).
  *
  * GET /v1/attestation/report?model={model}&signing_algo=ecdsa&nonce={random_hex}
+ *              &signing_address={the key that signed the chat}
  *
- * The attestation proves the model is running inside a genuine TEE environment,
- * providing hardware-level trust for the AI inference.
+ * `signing_address` matters: without it the report may describe a different
+ * serving key, and the attestation would not be bound to the signature.
+ *
+ * The response shape is:
+ *   { gateway_attestation: { signing_address, intel_quote, report_data, request_nonce, ... },
+ *     model_attestations: [ { provider, verified, tcb_status, gpu_verdict, gpu_evidence,
+ *                             quote_b64, certificate_b64, nonce, ... } ] }
  */
 async function fetchModelAttestation(
   model: string,
   apiKey: string,
+  signingAddress: string,
 ): Promise<ModelAttestation> {
   const nonce = randomBytes(32).toString('hex');
-  const url = `https://cloud-api.near.ai/v1/attestation/report?model=${encodeURIComponent(model)}&signing_algo=ecdsa&nonce=${nonce}`;
+  const url = `https://cloud-api.near.ai/v1/attestation/report?model=${encodeURIComponent(model)}&signing_algo=ecdsa&nonce=${nonce}&signing_address=${encodeURIComponent(signingAddress)}`;
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -188,16 +241,31 @@ async function fetchModelAttestation(
   }
 
   const report = await res.json() as {
-    signing_address: string;
-    attestation_report: string;
-    attestation_type?: string;
+    gateway_attestation?: { signing_address: string; intel_quote: string; report_data: string; request_nonce: string };
+    model_attestations?: Array<{ provider?: string; verified?: boolean; tcb_status?: string; gpu_verdict?: string; quote_b64?: string; certificate_b64?: string; nonce?: string; gpu_evidence?: unknown }>;
   };
 
+  const gw = report.gateway_attestation;
+  const m = report.model_attestations?.[0];
+  if (!gw?.intel_quote) {
+    throw new Error('Attestation report carries no gateway_attestation.intel_quote');
+  }
+
   return {
-    signing_address: report.signing_address,
+    signing_address: gw.signing_address ?? signingAddress,
     model,
-    nonce,
-    attestation_report: report.attestation_report,
-    attestation_type: report.attestation_type,
-  };
+    nonce: gw.request_nonce ?? nonce,
+    attestation_report: gw.intel_quote,
+    attestation_type: 'intel-tdx',
+    // The model-side facts the API reports; kept so a buyer can see who served
+    // the model and what the TCB/GPU verdicts were.
+    provider: m?.provider ?? null,
+    model_verified: m?.verified ?? null,
+    tcb_status: m?.tcb_status ?? null,
+    gpu_verdict: m?.gpu_verdict ?? null,
+    gpu_evidence: m?.gpu_evidence ?? null,
+    model_quote_b64: m?.quote_b64 ?? null,
+    model_certificate_b64: m?.certificate_b64 ?? null,
+    report_data: gw.report_data ?? null,
+  } as ModelAttestation;
 }

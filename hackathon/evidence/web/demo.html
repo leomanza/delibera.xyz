@@ -97,7 +97,7 @@
 
     <section>
       <h2>5 · Settlement exists — on-chain, verifiable <span class="badge test">live testnet 2026-11-08</span></h2>
-      <div class="kv"><b>same loop, this repo</b><span>proposal <b>#76</b> on <code>coordinator.agents-coordinator.testnet</code> — 3 real jurors voted independently (Rejected 0-3), <code>coordinator_resume</code> finalized it. Triple check: sha256(that run's stored results) == the contract's result_hash commitments.</span></div>
+      <div class="kv"><b>same loop, this repo</b><span>proposal <b>#76</b> on <code>coordinator.agents-coordinator.testnet</code> — 3 real jurors voted independently and <code>coordinator_resume</code> finalized it. Triple check: sha256(that run's stored results) == the contract's result_hash commitments. The tally it settled (<b>Rejected 0-3</b>) came from a parser bug in the harness — the live bytes say <b>Approved 3-0</b>; see the known-issue note in the receipt.</span></div>
       <div class="kv"><b>mainnet status</b><span>contract <code>coordinator.agents-coordinator.near</code> exists and answers (id 0) — mainnet settle precedent honestly <b>omitted</b> until run with the owner's key</span></div>
       <div class="kv"><b>payment rails</b><span>NEAR mainnet USDC (native), via the Agent Connect API</span></div>
     </section>

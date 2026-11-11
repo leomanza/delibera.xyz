@@ -24,6 +24,12 @@ export interface WorkerResult {
     computedAt: string;
   };
   processingTime?: number;
+  /**
+   * The TEE proof for this reasoning. It travels INSIDE the result so the
+   * on-chain result_hash — which commits to these exact bytes — binds the
+   * sealed reasoning to the attestation that produced it.
+   */
+  verificationProof?: VerificationProof;
 }
 
 /**
@@ -177,6 +183,12 @@ export interface VerificationProof {
   signing_algo: string;
   timestamp: number;
   attestation?: ModelAttestation;
+  /** The signed payload verbatim ("request_hash:response_hash"). */
+  text?: string;
+  /** Exact bytes sent to /v1/chat/completions — lets a buyer re-derive request_hash. */
+  request_body?: string;
+  /** Exact bytes received — lets a buyer re-derive response_hash. */
+  response_body?: string;
 }
 
 /**
@@ -188,6 +200,23 @@ export interface ModelAttestation {
   signing_address: string;
   model: string;
   nonce: string;
+  /** The Intel TDX quote (hex) — verified locally with nearai-cloud-verifier. */
   attestation_report: string;
   attestation_type?: string;
+  /** Serving provider reported by the API ("near" or the attested fallback "chutes"). */
+  provider?: string | null;
+  /** Server-side verdict for the model attestation. */
+  model_verified?: boolean | null;
+  /** Trusted-computing-base status reported by the API. */
+  tcb_status?: string | null;
+  /** NVIDIA GPU attestation verdict reported by the API. */
+  gpu_verdict?: string | null;
+  /** GPU attestation evidence as returned by the API (certificates, per-GPU records). */
+  gpu_evidence?: unknown;
+  /** The model-side TDX quote (base64). */
+  model_quote_b64?: string | null;
+  /** The serving certificate (base64). */
+  model_certificate_b64?: string | null;
+  /** report_data = signing_address || nonce — binds the quote to this key. */
+  report_data?: string | null;
 }

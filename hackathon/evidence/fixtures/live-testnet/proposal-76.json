@@ -4,7 +4,15 @@
     "network": "testnet",
     "contract": "coordinator.agents-coordinator.testnet",
     "kind": "live-run",
-    "stateVerifiedAt": "2026-11-11 \u2014 re-read from the contract: state Finalized, 3 submissions, tally Rejected 0-3"
+    "stateVerifiedAt": "2026-11-11 \u2014 re-read from the contract: state Finalized, 3 submissions, tally Rejected 0-3",
+    "knownIssue": {
+      "summary": "The tally recorded here is WRONG. The harness parsed the memory ENVELOPE instead of the result document, so every juror looked like 'no vote' and was counted as a rejection.",
+      "recordedTally": "Rejected 0-3 (what the run computed and settled on-chain)",
+      "trueTallyFromLiveBytes": "Approved 3-0 \u2014 all three jurors voted Approved (output.value = 1); re-read live from Ensue with the fixed parser",
+      "whyNotCorrectedOnChain": "coordinator_resume only accepts a proposal in WorkersCompleted state; proposal #76 is Finalized, so the wrong tally cannot be amended. A new run settles the correct one.",
+      "fix": "scripts/run-live.ts \u2014 extractResultJson() unwraps the envelope before parsing and before hashing; test/cso.test.ts pins it.",
+      "note": "The result_hashes on-chain commit to the raw memory body (sha of the envelope), not to the result document. That still binds the result \u2014 the envelope contains the exact result JSON \u2014 but the fixed code commits to the result document itself."
+    }
   },
   "taskConfig": "{\"type\":\"vote\",\"parameters\":{\"proposal\":\"Renewal case (demo transcript replay): an owner policy refused a $0.01 payment to ac-owner.delibera.near (whitelist only). A private jury of 3 agents re-reviewed; should this payment have been allowed?\",\"voting_config\":{\"min_workers\":3,\"quorum\":2}},\"timeout\":30000}",
   "tally": {
