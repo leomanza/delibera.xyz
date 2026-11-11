@@ -57,6 +57,19 @@ export interface CapturedProof {
   signature: string;
   signing_address: string;
   signing_algo: string;
+  /** sha256 of the exact request/response bytes (the bytes are not committed). */
+  request_body_sha256?: string;
+  response_body_sha256?: string;
+  vote?: string;
+  attestation?: {
+    intel_quote?: string;
+    request_nonce?: string;
+    report_data?: string;
+    provider?: string | null;
+    tcb_status?: string | null;
+    gpu_verdict?: string | null;
+    attestation_type?: string;
+  };
 }
 
 export interface ProofBundle {
@@ -71,6 +84,7 @@ export interface TeeVerdict {
   signatureValid: boolean;
   signingAddress: string;
   model: string;
+  committedQuoteVerified: boolean;
   tdxVerified: boolean;
   reportDataBindsKey: boolean;
   gpuVerdict: string | null;
@@ -103,10 +117,23 @@ export function verifyChatSignature(proof: CapturedProof): boolean {
 }
 
 /**
+ * Verify the COMMITTED Intel TDX quote — offline, no network, no key.
+ * The quote is the hardware evidence; the report_data binds it to the signing
+ * key and the nonce that was requested with it.
+ */
+export async function verifyCommittedQuote(proof: CapturedProof): Promise<boolean> {
+  const q = proof.attestation?.intel_quote;
+  const nonce = proof.attestation?.request_nonce;
+  if (!q || !nonce) return false;
+  const verification = await verifyGatewayAttestation({ intel_quote: q, request_nonce: nonce });
+  return verification.intel.quote.verified === true;
+}
+
+/**
  * Fetch a fresh attestation for the signing key and verify the Intel TDX
  * quote with the official verifier. Free, no key required.
  */
-export async function verifyTeeHardware(signingAddress: string, model: string): Promise<Omit<TeeVerdict, 'workerId' | 'signatureValid' | 'signingAddress' | 'model'>> {
+export async function verifyTeeHardware(signingAddress: string, model: string): Promise<Omit<TeeVerdict, 'workerId' | 'signatureValid' | 'signingAddress' | 'model' | 'committedQuoteVerified'>> {
   const nonce = randomNonce();
   const url = `${CLOUD}/v1/attestation/report?model=${encodeURIComponent(model)}&signing_algo=ecdsa&nonce=${nonce}&signing_address=${signingAddress}`;
   const res = await fetch(url);
@@ -152,8 +179,14 @@ async function main(): Promise<number> {
     } catch (e: unknown) {
       console.log(`  ${p.workerId.slice(0, 22)}… signature check ERROR: ${e instanceof Error ? e.message.slice(0, 120) : String(e).slice(0, 120)}`);
     }
+    let committedQuoteVerified = false;
+    try {
+      committedQuoteVerified = await verifyCommittedQuote(p);
+    } catch (e: unknown) {
+      console.log(`  ${p.workerId.slice(0, 22)}… committed quote check ERROR: ${e instanceof Error ? e.message.slice(0, 120) : String(e).slice(0, 120)}`);
+    }
     seen.set(p.signing_address, p.model);
-    verdicts.push({ workerId: p.workerId, signatureValid, signingAddress: p.signing_address, model: p.model, tdxVerified: false, reportDataBindsKey: false, gpuVerdict: null, tcbStatus: null, provider: null });
+    verdicts.push({ workerId: p.workerId, signatureValid, committedQuoteVerified, signingAddress: p.signing_address, model: p.model, tdxVerified: false, reportDataBindsKey: false, gpuVerdict: null, tcbStatus: null, provider: null });
   }
 
   for (const [address, model] of seen) {
@@ -176,14 +209,16 @@ async function main(): Promise<number> {
   for (const v of verdicts) {
     console.log(`  ${v.workerId.slice(0, 22)}…  model ${v.model}`);
     console.log(`     chat signature valid : ${v.signatureValid ? 'YES' : 'NO'}   (key ${v.signingAddress.slice(0, 12)}…)`);
+    console.log(`     committed TDX quote  : ${v.committedQuoteVerified ? 'VERIFIED (offline, from the run)' : 'NOT VERIFIED'}`);
     console.log(`     Intel TDX quote      : ${v.tdxVerified ? 'VERIFIED' : 'NOT VERIFIED'}${v.reportDataBindsKey ? ' · report_data binds the signing key' : ''}`);
     console.log(`     GPU verdict (server) : ${v.gpuVerdict ?? 'n/a'} · tcb ${v.tcbStatus ?? 'n/a'} · provider ${v.provider ?? 'n/a'}`);
   }
 
   const sigOk = verdicts.every((v) => v.signatureValid);
+  const committedOk = verdicts.every((v) => v.committedQuoteVerified);
   const tdxOk = verdicts.every((v) => v.tdxVerified && v.reportDataBindsKey);
-  const line = sigOk && tdxOk ? 'TEE PROOF VERIFIED' : sigOk ? 'SIGNATURES VERIFIED · TEE HARDWARE NOT CONFIRMED' : 'SIGNATURE VERIFICATION FAILED';
-  console.log(`\nTEE ${line} — ${verdicts.filter((v) => v.signatureValid).length}/${verdicts.length} signatures valid, ${verdicts.filter((v) => v.tdxVerified).length}/${verdicts.length} keys bound to Intel TDX hardware`);
+  const line = sigOk && committedOk && tdxOk ? 'TEE PROOF VERIFIED' : sigOk ? 'SIGNATURES VERIFIED · TEE HARDWARE NOT CONFIRMED' : 'SIGNATURE VERIFICATION FAILED';
+  console.log(`\nTEE ${line} — ${verdicts.filter((v) => v.signatureValid).length}/${verdicts.length} signatures valid, ${verdicts.filter((v) => v.committedQuoteVerified).length}/${verdicts.length} committed quotes verified, ${verdicts.filter((v) => v.tdxVerified).length}/${verdicts.length} keys bound to Intel TDX hardware`);
   console.log('verified with nearai-cloud-verifier (NEAR AI official) — TDX quote checked locally, GPU verdict as reported by the API');
   return sigOk && tdxOk ? 0 : 1;
 }

@@ -69,6 +69,22 @@ async function readStatus(did: string): Promise<string | undefined> {
   return (await ensue.get(workerKeys(did).STATUS))?.trim();
 }
 
+/**
+ * Is this result from the CURRENT round?
+ * The result document carries output.computedAt (ISO). A result from an
+ * earlier round is stale even though it is present in the store.
+ */
+export function isFreshResult(raw: string, triggeredAt: number, skewMs = 5_000): boolean {
+  try {
+    const doc = JSON.parse(extractResultJson(raw)) as { output?: { computedAt?: string } };
+    const computedAt = Date.parse(doc?.output?.computedAt ?? '');
+    if (!Number.isFinite(computedAt)) return false;
+    return computedAt >= triggeredAt - skewMs;
+  } catch {
+    return false;
+  }
+}
+
 interface WorkerResultDoc { workerId?: string; output?: { value?: number; vote?: string }; }
 
 /* Trusted boundary: the memory store's envelope. The result document lives in
@@ -125,6 +141,7 @@ export async function runLive(args: {
   }
 
   let proposalId: number;
+  let triggeredAt = Date.now(); // set in step 2; a result must be newer than this
   const taskConfig = JSON.stringify({
     type: 'vote',
     parameters: { proposal: proposalText, voting_config: { min_workers: jurors, quorum } },
@@ -143,8 +160,24 @@ export async function runLive(args: {
     console.log(`  contract ${contractName} (${NEAR_NETWORK}) current proposal id: ${beforeId}`);
 
     step(2, 'Trigger — write task config + pending states to Ensue');
+    // A worker that is still voting when we set "pending" would start a SECOND
+    // vote the moment it finishes, overwriting the result we are about to
+    // commit. Wait for the panel to be idle before triggering.
+    for (const did of dids) {
+      const status = await readStatus(did);
+      if (status === 'pending' || status === 'processing') {
+        console.log(`  worker ${did.slice(0, 22)}… is ${status} — waiting for it to settle`);
+        const until = Date.now() + WORKER_TIMEOUT;
+        while (Date.now() < until) {
+          const s = await readStatus(did);
+          if (s !== 'pending' && s !== 'processing') break;
+          await new Promise((r) => setTimeout(r, POLLS_MS));
+        }
+      }
+    }
     await put(COORDINATOR_STATUS_KEY, 'monitoring');
     await put(TASK_CONFIG_KEY, taskConfig);
+    triggeredAt = Date.now();
     for (const did of dids) {
       await put(workerKeys(did).STATUS, 'pending');
     }
@@ -158,21 +191,25 @@ export async function runLive(args: {
     console.log(`  proposal #${proposalId} opened`);
   }
 
-  step(4, 'Wait — poll per-worker status or result presence');
+  step(4, 'Wait — poll per-worker status or FRESH result');
   const deadline = Date.now() + WORKER_TIMEOUT;
   const pending = new Set(dids);
   while (Date.now() < deadline && pending.size > 0) {
     for (const did of Array.from(pending)) {
       const result = await ensue.get(workerKeys(did).RESULT);
       const status = await readStatus(did);
-      // workers mark idle after finishing (result is the source of truth)
-      if (result || status === 'completed') pending.delete(did);
+      // A result only counts if it was produced AFTER this run's trigger.
+      // Merely finding a result is not enough: the store keeps the previous
+      // round's result, and settling on that would commit bytes the workers
+      // are about to overwrite — the on-chain hash would drift from the
+      // evidence within a minute.
+      if (result && isFreshResult(result, triggeredAt)) pending.delete(did);
       else if (status === 'failed' && !result) fatal(`worker ${did} reported failed`);
     }
     if (pending.size > 0) await new Promise((r) => setTimeout(r, POLLS_MS));
   }
   if (pending.size > 0) fatal(`workers did not finish in ${WORKER_TIMEOUT / 1000}s: ${Array.from(pending).join(', ')}`);
-  console.log(`  all ${dids.length} workers completed`);
+  console.log(`  all ${dids.length} workers completed (fresh results, produced after the trigger)`);
 
   step(5, 'Submissions — did + sha256(result) (nullifier)');
   const submissions: Array<{ worker_id: string; result_hash: string }> = [];

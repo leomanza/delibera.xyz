@@ -14,7 +14,8 @@
     "verify:ensue74": "tsx scripts/verify-ensue-74.ts",
     "live:testnet": "tsx scripts/run-live.ts",
     "test": "node --import tsx --test test/*.test.ts",
-    "verify:tee": "tsx scripts/verify-near-ai-tee.ts"
+    "verify:tee": "tsx scripts/verify-near-ai-tee.ts",
+    "verify:live": "tsx scripts/verify-live-precedent.ts"
   },
   "dependencies": {
     "@near-js/crypto": "^2.5.1",

@@ -86,7 +86,7 @@ git log --oneline pre-hackathon..hackathon
 | **The live session UI** — every step renders its API receipt; the owner signature is shown, not hidden; the 403 shows its full anatomy; the last screen is a copyable evidence receipt | `coordinator-agent/src/agent-connect/demo-page.ts`, `demo-routes.ts` |
 | **The verdict oracle seam** — proposal in → verdict card out, settlement untouched | `coordinator-agent/src/agent-connect/verdict-oracle.ts` |
 | **The evidence harness** — judge sequence, capsule (`cso-capsule/1`), offline digest verifier, no-key scanner, 18 invariant tests | `hackathon/evidence/` |
-| **A live end-to-end precedent on testnet** — proposal #76: 3 real jurors voted independently, `record_worker_submissions` + `coordinator_resume` settled on-chain, each juror's `sha256(result)` cross-checked against the contract's `result_hash` | `hackathon/evidence/fixtures/live-testnet/proposal-76.json` |
+| **A live end-to-end precedent on testnet** — proposal **#80**: three real jurors voted independently and **one dissented** (Approved 2-1, quorum 2/3), `record_worker_submissions` + `coordinator_resume` settled on-chain, and each juror's `sha256(result)` still equals the contract's `result_hash` | `hackathon/evidence/fixtures/live-testnet/proposal-80.json` |
 | **TEE proof for the jurors' reasoning** — the NEAR AI Cloud signature of each juror's reply is verified with **NEAR's own official verifier**, and the signing key is shown to be bound to genuine Intel TDX hardware | `npm run verify:tee` in `hackathon/evidence` |
 | **Jury size as a parameter** — `--jurors N --quorum K`; the contract already stored `expected_worker_count`/`quorum` | `hackathon/evidence/scripts/run-live.ts` |
 
@@ -169,17 +169,43 @@ What a live run proves, and what it does not:
 
 ### Known issue in precedent #76 (disclosed, not hidden)
 
-The tally that #76 settled on-chain (`Rejected 0-3`) is **wrong**. The harness
-parsed the memory *envelope* instead of the result document, so every juror
-looked like "no vote" and was counted as a rejection. Re-reading the same live
-bytes from Ensue with the fixed parser gives **Approved 3-0** — all three jurors
-voted `Approved`. The contract only accepts a resume from `WorkersCompleted`, so
-#76 cannot be amended; a later run settles the correct tally.
+The earlier precedent #76 settled a tally that is **wrong** (`Rejected 0-3`). The
+harness parsed the memory *envelope* instead of the result document, so every
+juror looked like "no vote" and was counted as a rejection; re-reading the same
+live bytes gives **Approved 3-0**. The contract only accepts a resume from
+`WorkersCompleted`, so #76 cannot be amended — hence the fresh **#80** above,
+which is the reference run.
 
 The bug is fixed (`extractResultJson()` in `hackathon/evidence/scripts/run-live.ts`)
-and pinned by two tests, and the receipt carries the whole story in its
+and pinned by tests, and the #76 receipt carries the whole story in its
 `knownIssue` note. We would rather show the judge a disclosed bug than a tidy
 lie.
+
+One more class of bug was found and fixed the same way: the run used to accept
+*any* stored result as "the workers finished", so it could settle on the
+*previous* round's votes while the workers were still voting. The wait now
+requires a result produced **after** the trigger (`isFreshResult()`), and the
+run refuses to trigger while a juror is still mid-vote.
+
+### Re-check the whole precedent yourself
+
+```sh
+cd hackathon/evidence
+npm run verify:live      # chain + receipt + live memory + TEE proofs, one command
+```
+
+```
+[1] CHAIN
+  OK   — state Finalized
+  OK   — 3 worker_submissions commitments match the receipt
+  OK   — on-chain verdict Approved 2-1 matches the receipt
+  OK   — sha256(aggregated_result) equals the committed resultHash
+[2] LIVE MEMORY (the bytes the commitments were made over)
+  OK   — did:key:z6MkuLv3ysAUfL… sha256(live result) == the committed resultHash
+  OK   —        TEE proof: the wire bytes re-derive the signed hashes and the signature verifies (Approved)
+  ...
+PRECEDENT VERIFICATION PASS — 0 check(s) failed
+```
 
 ---
 

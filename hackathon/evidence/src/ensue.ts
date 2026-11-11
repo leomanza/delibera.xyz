@@ -60,13 +60,20 @@ export const ensue = {
   /** Create keys — MUST precede update (create errors if the key exists). */
   create: (item: { key: string; value: string }) =>
     call('create_memory', { items: [{ key_name: item.key, description: item.key, value: item.value }] }),
-  /** Set-or-update safe call: create once at task start, update afterwards. */
+  /**
+   * Set-or-update. UPDATE FIRST: create_memory on an existing key returns
+   * success without overwriting the stored value — a silent no-op that left
+   * the workers' "pending" trigger stuck on the previous value. update_memory
+   * overwrites and throws "Memory not found" on a key that does not exist yet.
+   */
   set: async (key: string, value: string) => {
     try {
-      return await ensue.create({ key, value });
+      return await ensue.update(key, value);
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (msg.includes('already') || msg.includes('exist')) return ensue.update(key, value);
+      if (msg.includes('not found') || msg.includes('not_found')) {
+        return ensue.create({ key, value });
+      }
       throw e;
     }
   },

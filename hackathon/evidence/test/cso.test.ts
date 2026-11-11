@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs';
 import { buildCapsule } from '../src/capsule.js';
 import { parseEnsueResponse } from '../src/ensue.js';
 import { loadProposal74, loadReceipt } from '../src/verdict-fixture.js';
-import { buildTally, extractResultJson } from '../scripts/run-live.js';
+import { buildTally, extractResultJson, isFreshResult } from '../scripts/run-live.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -193,6 +193,26 @@ test('tally: a wrapped result is tallied by its VOTE, not counted as a rejection
   assert.equal(t.rules.approved, 1);
   assert.equal(t.rules.rejected, 0);
   assert.equal(t.decision, 'Approved');
+});
+
+test('freshness: a result from a previous round does not satisfy the wait', () => {
+  // The store keeps the last round's result. Settling on it would commit
+  // bytes the workers are about to overwrite — the on-chain hash would drift
+  // from the evidence within a minute.
+  const stale = JSON.stringify({
+    workerId: 'did:key:zX',
+    output: { value: 1, vote: 'Approved', computedAt: '2026-11-11T23:00:00.000Z' },
+  });
+  const fresh = JSON.stringify({
+    workerId: 'did:key:zX',
+    output: { value: 1, vote: 'Approved', computedAt: '2026-11-11T23:10:00.000Z' },
+  });
+  const triggeredAt = Date.parse('2026-11-11T23:05:00.000Z');
+  assert.equal(isFreshResult(stale, triggeredAt), false, 'a result from before the trigger is stale');
+  assert.equal(isFreshResult(fresh, triggeredAt), true, 'a result produced after the trigger is fresh');
+  // Unparsable or undated results never count as fresh.
+  assert.equal(isFreshResult('not json', triggeredAt), false);
+  assert.equal(isFreshResult('{"output":{}}', triggeredAt), false);
 });
 
 test('no-key scanner: repo is clean and .env is not tracked', () => {
