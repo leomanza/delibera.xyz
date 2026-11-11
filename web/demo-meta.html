@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confidential Second Opinion — repo meta</title>
+  <style>
+    :root {
+      --bg: #0b0f14; --panel: #111823; --line: #1d2733; --text: #dbe4ee;
+      --dim: #7c8b9c; --ok: #34d399; --accent: #5eead4;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+      font: 14px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+    main { max-width: 760px; margin: 0 auto; padding: 36px 20px 70px; }
+    h1 { font-size: 19px; margin: 0 0 4px; }
+    h1 span { color: var(--accent); }
+    .sub { color: var(--dim); font-size: 12.5px; margin-bottom: 28px; }
+    h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 26px 0 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    td { border-top: 1px solid var(--line); padding: 7px 4px; vertical-align: top; }
+    td:first-child { color: var(--text); white-space: nowrap; width: 160px; }
+    td:last-child { color: var(--dim); overflow-wrap: anywhere; }
+    code { color: var(--accent); }
+    .ok { color: var(--ok); }
+    a { color: var(--accent); }
+    ul { margin: 4px 0; padding-left: 18px; }
+    li { margin: 3px 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Repo meta — <span>how every claim here is checked</span></h1>
+    <p class="sub">No keys in any of these commands. Verifiers are offline; the live path polls
+    pre-existing chain state with a read-only view call.</p>
+
+    <h2>Package scripts</h2>
+    <table>
+      <tr><td><code>npm run fixtures</code></td><td>re-derive verdict cards + settlement plan from the captured fixtures (offline)</td></tr>
+      <tr><td><code>npm test</code></td><td><span class="ok">14 passing</span> — node:test invariants: capsule determinism · ensue SSE parser · fixture shapes · tally rule · no-key scanner sanity</td></tr>
+      <tr><td><code>npm run verify:signing</code></td><td>NEP-413 / NEP-366 signing byte-vs-byte against assets/test-vectors.json</td></tr>
+      <tr><td><code>npm run verify:capsule</code></td><td><span class="ok">offline</span> re-verify digests inside capsule.json against the four fixtures</td></tr>
+      <tr><td><code>npm run verify:ensue74</code></td><td>live cloud cross-check of the #74 capture (read-only)</td></tr>
+      <tr><td><code>npm run judge</code></td><td>9-step sequence: verdict card → policy → refusal → payment → capsule → set-of-keys → precedents → no-key scan</td></tr>
+      <tr><td><code>npm run live:testnet</code></td><td>full coordination loop (testnet) — requires <code>.env</code>; <code>--resume-only</code> to inspect a finished proposal</td></tr>
+    </table>
+
+    <h2>Evidence chain</h2>
+    <ul>
+      <li>captures → <code>fixtures/</code> (policy rev 4 · verdict #74 · vendor refusal · payment receipt)</li>
+      <li>capsule → <code>capsule.json</code> (generated; sha256-pinned; spec cso-capsule/1; git-ignored by design — re-derivable byte-exact via <code>npm run capsule</code>)</li>
+      <li>live receipts → <code>fixtures/live-testnet/proposal-76.json</code> (3 real jurors + coordinator, testnet, 2026-11-08)</li>
+      <li>this UI → <code>web/demo.html</code> (+ <code>web/verify.html</code> offline verifier)</li>
+    </ul>
+
+    <h2>Honest status</h2>
+    <ul>
+      <li class="ok">testnet precedent #76: end-to-end loop, real jurors, settlements recorded, correlated receipts persisted.</li>
+      <li>mainnet: contract <code>coordinator.agents-coordinator.near</code> answers (id 0) — <em>no mainnet settlement precedent yet</em>; the live path needs the owner's key (not in this repo, never will be).</li>
+      <li>vendor refusal bite: replayed by design — the $0.02 daily budget at capture time means a re-check cannot be re-attempted live; the refusal receipt is the evidence.</li>
+    </ul>
+
+    <p style="margin-top:26px"><a href="./demo.html">← back to the demo</a></p>
+  </main>
+</body>
+</html>

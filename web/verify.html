@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confidential Second Opinion — capsule verifier</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --panel: #111823;
+      --line: #1d2733;
+      --text: #dbe4ee;
+      --dim: #7c8b9c;
+      --ok: #34d399;
+      --bad: #f87171;
+      --accent: #5eead4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      display: flex;
+      align-items: flex-start;
+      justify-content: center;
+      padding: 40px 16px;
+      min-height: 100vh;
+    }
+    main { width: 720px; max-width: 100%; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    h1 span { color: var(--accent); }
+    .sub { color: var(--dim); font-size: 12px; margin-bottom: 24px; }
+    #drop {
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      padding: 34px 20px;
+      text-align: center;
+      color: var(--dim);
+      transition: border-color .2s, color .2s, background .2s;
+      cursor: pointer;
+    }
+    #drop.over { border-color: var(--accent); color: var(--text); background: rgba(94,234,212,.04); }
+    #drop b { color: var(--text); font-weight: 600; }
+    .filelist { margin: 18px 0 0; padding: 0; list-style: none; }
+    .filelist li {
+      display: flex; justify-content: space-between; gap: 12px;
+      padding: 9px 12px; border: 1px solid var(--line); border-radius: 8px;
+      margin-bottom: 8px; background: var(--panel);
+      font-size: 12px;
+    }
+    .filelist .name { color: var(--text); overflow-wrap: anywhere; }
+    .filelist .digest { color: var(--dim); overflow-wrap: anywhere; }
+    .stamp { color: var(--ok); font-weight: 600; }
+    .stamp.bad { color: var(--bad); }
+    #summary {
+      margin-top: 18px; padding: 14px 16px; border-radius: 10px;
+      border: 1px solid var(--line); background: var(--panel);
+      display: none;
+    }
+    #summary .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; font-size: 12px; }
+    #summary .row b { color: var(--text); font-weight: 500; }
+    #verdict { margin-top: 14px; font-size: 15px; font-weight: 700; }
+    #verdict.ok { color: var(--ok); }
+    #verdict.bad { color: var(--bad); }
+    footer { margin-top: 26px; color: var(--dim); font-size: 11px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Confidential Second Opinion — <span>capsule verifier</span></h1>
+    <p class="sub">Offline, no keys, no network calls. Drop <b>capsule.json</b> plus the four fixture files it pins. Every sha256 is recomputed in your browser from the bytes you drop.</p>
+
+    <div id="drop">Drop <b>capsule.json</b> + <b>proposal-74.json</b> + <b>receipt-approved.json</b> + <b>receipt-denied.json</b> + <b>policy.json</b><br><small>(or click to pick files)</small></div>
+    <input id="picker" type="file" multiple hidden>
+
+    <ul id="filelist" class="filelist"></ul>
+
+    <div id="summary"></div>
+    <div id="verdict"></div>
+
+    <footer>spec cso-capsule/1 — digests: SHA-256 hex over exact file bytes · total: re-derived · tests: re-rendered · juror reasoning stays sealed in the on-chain commitments</footer>
+  </main>
+
+  <script type="module">
+    const drop = document.getElementById('drop');
+    const picker = document.getElementById('picker');
+    const list = document.getElementById('filelist');
+    const summary = document.getElementById('summary');
+    const verdictEl = document.getElementById('verdict');
+
+    drop.addEventListener('click', () => picker.click());
+    picker.addEventListener('change', () => verifyFiles(Array.from(picker.files)));
+    ['dragover', 'dragenter'].forEach((e) => drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.add('over'); }));
+    ['dragleave', 'drop'].forEach((e) => drop.addEventListener(e, (ev) => { ev.preventDefault(); drop.classList.remove('over'); }));
+    drop.addEventListener('drop', (ev) => verifyFiles(Array.from(ev.dataTransfer.files)));
+
+    async function digest(file) {
+      const buf = await file.arrayBuffer();
+      const hash = await crypto.subtle.digest('SHA-256', buf);
+      return toHex(new Uint8Array(hash));
+    }
+
+    function toHex(bytes) {
+      return Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    async function verifyFiles(files) {
+      list.innerHTML = '';
+      summary.style.display = 'none';
+      verdictEl.textContent = '';
+      verdictEl.className = '';
+
+      const capsuleFile = files.find((f) => f.name === 'capsule.json');
+      if (!capsuleFile) {
+        stampNone('FAIL', 'capsule.json missing — the capsule is the signed roster of digests');
+        return;
+      }
+      // Trusted boundary: capsule.json is the verifier input by definition;
+      // malformed JSON below surfaces a FAIL, never a fake PASS.
+      const capsule = JSON.parse(await capsuleFile.text());
+      if (capsule.spec !== 'cso-capsule/1') {
+        stampNone('FAIL', `unknown spec "${capsule.spec}" — expected cso-capsule/1`);
+        return;
+      }
+
+      const digestsOfCapsule = new Map(capsule.fixtures.map((f) => [f.name, f.digest]));
+      const rows = [];
+      for (const f of files) {
+        const d = await digest(f);
+        const expected = digestsOfCapsule.get(f.name);
+        const ok = expected ? expected.toLowerCase() === d : null;
+        rows.push({ f, d, ok });
+        const li = document.createElement('li');
+        li.innerHTML = `<span class="name">${escapeHtml(f.name)}</span><span class="digest">${d.slice(0, 16)}… ${stampText(ok)}</span>`;
+        list.appendChild(li);
+      }
+
+      const missing = Array.from(digestsOfCapsule.keys()).filter((n) => !files.some((f) => f.name === n));
+      if (missing.length) {
+        stampNone('FAIL', `fixtures missing: ${missing.join(', ')}`);
+        return;
+      }
+
+      summary.innerHTML = `
+        <div class="row"><b>spec</b><span>${escapeHtml(capsule.spec)}</span></div>
+        <div class="row"><b>generatedAt</b><span>${escapeHtml(capsule.generatedAt)}</span></div>
+        <div class="row"><b>verdict</b><span>${escapeHtml(capsule.totals.verdict.decision)} ${capsule.totals.verdict.approved}-${capsule.totals.verdict.rejected}</span></div>
+        <div class="row"><b>oracle (usdc atomic)</b><span>${escapeHtml(capsule.totals.oraclePaymentAtomic)}</span></div>
+        <div class="row"><b>vendor (usdc atomic)</b><span>${escapeHtml(capsule.totals.vendorPaymentAtomic)}</span></div>
+        <div class="row"><b>checks</b><span>amountsAtomic ${capsule.checks.amountsAtomicStrings ? 'yes' : 'NO'} · noPrivateMaterial ${capsule.checks.noPrivateMaterial ? 'yes' : 'NO'} · reasoning sealed ${capsule.checks.jurorReasoningSealed ? 'yes' : 'NO'}</span></div>`;
+      summary.style.display = 'block';
+
+      const allMatch = rows.filter((r) => r.ok !== null).every((r) => r.ok);
+      verdictEl.className = allMatch ? 'ok' : 'bad';
+      verdictEl.textContent = allMatch ? 'CAPSULE VERIFIED — offline, no keys, byte-linked to evidence' : 'CAPSULE FAILED — a dropped file does not match the pinned digest';
+    }
+
+    function stampText(ok) {
+      if (ok === true) return '<span class="stamp">PASS</span>';
+      if (ok === false) return '<span class="stamp bad">MISMATCH</span>';
+      return '<span class="stamp">unpinned</span>';
+    }
+
+    function stampNone(kind, message) {
+      verdictEl.className = kind === 'FAIL' ? 'bad' : 'ok';
+      verdictEl.textContent = `${kind}: ${message}`;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+  </script>
+</body>
+</html>

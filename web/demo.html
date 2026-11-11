@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Confidential Second Opinion — demo</title>
+  <style>
+    :root {
+      --bg: #0b0f14; --panel: #111823; --line: #1d2733; --text: #dbe4ee;
+      --dim: #7c8b9c; --ok: #34d399; --bad: #f87171; --warn: #fbbf24; --accent: #5eead4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--bg); color: var(--text);
+      font: 15px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+    main { max-width: 880px; margin: 0 auto; padding: 36px 20px 70px; }
+    h1 { font-size: 21px; margin: 0 0 4px; }
+    h1 span { color: var(--accent); }
+    .sub { color: var(--dim); font-size: 13px; margin-bottom: 30px; }
+    section { border: 1px solid var(--line); border-radius: 12px; background: var(--panel);
+      padding: 18px 20px; margin-bottom: 16px; }
+    section h2 { margin: 0 0 10px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+    .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 10.5px;
+      border: 1px solid var(--line); color: var(--dim); margin-left: 8px; vertical-align: middle; }
+    .badge.ok { color: var(--ok); border-color: rgba(52,211,153,.35); }
+    .badge.bad { color: var(--bad); border-color: rgba(248,113,113,.35); }
+    .badge.test { color: var(--warn); border-color: rgba(251,191,36,.35); }
+    .kv { display: flex; gap: 14px; padding: 3px 0; font-size: 12.5px; }
+    .kv b { color: var(--dim); font-weight: 400; min-width: 130px; flex-shrink: 0; }
+    .kv span { overflow-wrap: anywhere; }
+    .refuse { border-left: 3px solid var(--bad); padding-left: 14px; }
+    .refuse .big { color: var(--bad); font-size: 18px; font-weight: 700; }
+    .jurors { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .juror { border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+    .juror .name { font-weight: 700; font-size: 13px; }
+    .juror .did { color: var(--dim); font-size: 10.5px; overflow-wrap: anywhere; margin: 6px 0; }
+    .juror .vote { display: inline-block; padding: 2px 10px; border-radius: 999px;
+      background: rgba(52,211,153,.12); color: var(--ok); font-size: 11px; border: 1px solid rgba(52,211,153,.3); }
+    .hash { font-size: 10.5px; color: var(--dim); overflow-wrap: anywhere; }
+    .tl { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11.5px; }
+    .tl .node { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line); }
+    .tl .node.done { color: var(--ok); border-color: rgba(52,211,153,.35); }
+    .tl .node.unc { color: var(--warn); border-color: rgba(251,191,36,.4); }
+    .tl .arrow { color: var(--dim); }
+    .actions { margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap; }
+    a.btn { text-decoration: none; color: var(--text); border: 1px solid var(--line);
+      border-radius: 10px; padding: 10px 16px; font-size: 13px; }
+    a.btn:hover { border-color: var(--accent); color: var(--accent); }
+    footer { color: var(--dim); font-size: 11px; margin-top: 30px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Confidential Second Opinion — <span>demo</span></h1>
+    <p class="sub">A wallet that can only buy a second opinion. Every card below replays a
+    <b>captured receipt</b> — nothing is invented; the same values are pinned by the
+    evidence capsule (<b>capsule.json</b>) and re-derivable offline.</p>
+
+    <section>
+      <h2>1 · Owner-signed policy <span class="badge ok">APPLIED · provider synced</span><span class="badge test">capture 2026-10-19</span></h2>
+      <div class="kv"><b>destination rule</b><span>whitelist <code>only</code> — any other destination is refused by the provider itself</span></div>
+      <div class="kv"><b>budget</b><span>daily $0.20 USD cap ($0.019998 spent at capture)</span></div>
+      <div class="kv"><b>policy hash</b><span class="hash">a435476dd5b4f903c1b5e91f3c732ac66d976ec4355684af0293c04169d3e3ed (rev 4)</span></div>
+    </section>
+
+    <section>
+      <h2>2 · The guardrail bites BEFORE dispatch <span class="badge bad">403 refusal</span></h2>
+      <div class="refuse">
+        <div class="big">403 — policy_destination_denied</div>
+        <div class="kv"><b>tried destination</b><span>ac-owner.delibera.near (not on the whitelist)</span></div>
+        <div class="kv"><b>who refused</b><span>the Agent Connect API, after checking the owner-signed destinations — checked BEFORE dispatch</span></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>3 · Second opinion — 3 private agents, 3-0 <span class="badge ok">verdict #74</span></h2>
+      <div class="kv"><b>asked</b><span>“Should the refused payment have been allowed?”</span></div>
+      <div class="jurors" id="jurors"></div>
+      <div class="kv" style="margin-top:10px"><b>reasoning</b><span class="hash">sealed by design — only the sha256 resultHash commitments exist on-chain</span></div>
+    </section>
+
+    <section>
+      <h2>4 · One owner signature ratifies, then the payment goes through <span class="badge ok">SUCCESS</span></h2>
+      <div class="kv"><b>signature</b><span>NEP-413 · recipient <code>api.demo.agentsonintents.com</code> · tag 2147484061</span></div>
+      <div class="kv"><b>after ratification</b><span>rev 4 adds <code>ac-owner.delibera.near</code> — whitelist stays <code>only</code> (the rule keeps the gate)</span></div>
+      <div class="kv"><b>timeline</b></div>
+      <div class="tl">
+        <span class="node">PENDING</span><span class="arrow">→</span>
+        <span class="node">PROCESSING</span><span class="arrow">→</span>
+        <span class="node unc">UNCERTAIN</span><span class="arrow">→</span>
+        <span class="node done">SUCCESS</span>
+      </div>
+      <div class="kv" style="margin-top:8px"><b>uncertain handling</b><span>polled the original correlation id — never resubmitted</span></div>
+      <div class="kv"><b>amounts</b><span>oracle $0.01 (10000) + vendor $0.01 (10000) — atomic integer strings</span></div>
+    </section>
+
+    <section>
+      <h2>5 · Settlement exists — on-chain, verifiable <span class="badge test">live testnet 2026-11-08</span></h2>
+      <div class="kv"><b>same loop, this repo</b><span>proposal <b>#76</b> on <code>coordinator.agents-coordinator.testnet</code> — 3 real jurors voted independently (Rejected 0-3), <code>coordinator_resume</code> finalized it. Triple check: sha256(that run's stored results) == the contract's result_hash commitments.</span></div>
+      <div class="kv"><b>mainnet status</b><span>contract <code>coordinator.agents-coordinator.near</code> exists and answers (id 0) — mainnet settle precedent honestly <b>omitted</b> until run with the owner's key</span></div>
+      <div class="kv"><b>payment rails</b><span>NEAR mainnet USDC (native), via the Agent Connect API</span></div>
+    </section>
+
+    <div class="actions">
+      <a class="btn" href="./verify.html">Verify evidence capsule offline →</a>
+      <a class="btn" href="./demo-meta.html">API/repo meta →</a>
+    </div>
+
+    <footer>supporting art: judge sequence (<code>npm run judge</code>) · verifier (<code>npm run verify:capsule</code>) · capsule spec cso-capsule/1 · no keys, no funds, no rewrites of history</footer>
+  </main>
+
+  <script type="module">
+    // Real captured jurors (proposal-74.json, committed fixture — byte-pinned by capsule.json).
+    const jurors = [
+      { name: 'Juror 1', did: 'did:key:z6Mkpp7u6Nnp86vX79LnRF', vote: 'Approved' },
+      { name: 'Juror 2', did: 'did:key:z6MkuLv3ysAUfL2nRRPUVd', vote: 'Approved' },
+      { name: 'Juror 3', did: 'did:key:z6MktUzP9U4gmN5RABfdRB', vote: 'Approved' },
+    ];
+    const host = document.getElementById('jurors');
+    for (const j of jurors) {
+      const card = document.createElement('div');
+      card.className = 'juror';
+      card.innerHTML = `<div class="name">${j.name}</div>
+        <div class="did">${j.did}…</div>
+        <span class="vote">${j.vote}</span>`;
+      host.appendChild(card);
+    }
+  </script>
+</body>
+</html>
