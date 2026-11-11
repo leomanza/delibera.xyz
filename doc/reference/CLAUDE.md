@@ -444,11 +444,12 @@ proposal_index   JSON array of proposal IDs ["1","2",...]
 
 ---
 
-## NEAR AI Integration — unchanged
+## NEAR AI Integration — updated 2026-10-04
 
 - API: `https://cloud-api.near.ai/v1` (OpenAI-compatible)
-- Auth: `Authorization: Bearer {NEAR_API_KEY}`
-- Model: `deepseek-ai/DeepSeek-V3.1`
+- Auth: `Authorization: Bearer {NEAR_AI_API_KEY}` (fallback: `NEAR_API_KEY`)
+- Model: `deepseek/deepseek-v3.2` (default in `ai-voter.ts`; override via `NEAR_AI_MODEL` env)
+  - ⚠️ `deepseek-ai/DeepSeek-V3.1` was REMOVED from the NEAR AI catalog (Oct 2026). Check `/v1/models` if the default fails.
 - Tool call: `tool_choice: {type:"function", function:{name:"dao_vote"}}`
 - Tool schema: `dao_vote({vote: "Approved"|"Rejected", reasoning: string})`
 - Verification proof: `GET /v1/signature/{chat_id}?model={model_id}&signing_algo=ecdsa`

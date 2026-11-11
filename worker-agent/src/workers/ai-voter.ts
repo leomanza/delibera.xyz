@@ -39,7 +39,7 @@ export async function aiVote(manifesto: string, proposal: string, agentContext?:
   }
   userMessage += `=== DAO MANIFESTO ===\n${manifesto}\n\n=== PROPOSAL ===\n${proposal}`;
 
-  const model = 'deepseek-ai/DeepSeek-V3.1';
+  const model = process.env.NEAR_AI_MODEL || 'deepseek/deepseek-v3.2';
 
   const request: ChatCompletionCreateParamsNonStreaming = {
     model,

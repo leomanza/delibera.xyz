@@ -52,3 +52,16 @@ doc/plans/
 .claude/
 
 .playwright-mcp/
+
+# Agent tool scratch dirs — local state, never evidence
+.atl/
+.devin/
+.grok/
+.hermes/
+.vercel/
+
+# Vendored third-party servers cloned in-place — not our code
+mcp-storage-server/
+
+# Pre-workspace lockfile snapshots (superseded by the bun workspace lock)
+*.preworkspace

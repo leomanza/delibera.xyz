@@ -13,7 +13,9 @@
     "docker:build": "sudo docker build --platform linux/amd64 -t yourusername/coordinator-agent:latest .",
     "docker:build:no-cache": "sudo docker build --no-cache --platform linux/amd64 -t yourusername/coordinator-agent:latest .",
     "docker:push": "sudo docker push yourusername/coordinator-agent",
-    "phala:deploy": "phala cvms create --name coordinator-agent --vcpu 1 --compose ./docker-compose.yaml --env-file ./.env.development.local"
+    "phala:deploy": "phala cvms create --name coordinator-agent --vcpu 1 --compose ./docker-compose.yaml --env-file ./.env.development.local",
+    "market:poller": "DOTENV_CONFIG_PATH=.env.development.local tsx -r dotenv/config src/market/market-poller.ts",
+    "agent-connect:demo": "DOTENV_CONFIG_PATH=.env.development.local tsx -r dotenv/config src/agent-connect/demo.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.15.0",

@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "problem-framing-canvas": {
+      "source": "deanpeters/product-manager-skills",
+      "sourceType": "github",
+      "skillPath": "skills/problem-framing-canvas/SKILL.md",
+      "computedHash": "010a59e29e360ae5ff9e9f08b370ff7d942c3ae6fe57cdf8f5c0377c98a99ee1"
+    }
+  }
+}

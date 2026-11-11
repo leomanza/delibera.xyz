@@ -11,6 +11,8 @@ import { getAgentDid } from './storacha/identity';
 import { createX402Middleware } from './x402/middleware';
 import { logX402Config } from './x402/config';
 import x402Router from './x402/x402-router';
+import { verdictOracle } from './agent-connect/verdict-oracle';
+import { demoRoutes } from './agent-connect/demo-routes';
 
 const LOCAL_MODE = process.env.LOCAL_MODE === 'true';
 
@@ -49,6 +51,12 @@ app.get('/', (c) => {
 
 // Coordination routes
 app.route('/api/coordinate', coordinateRoute);
+
+// Agent Connect verdict oracle — POST /agent-connect/verdict {proposal} →
+// poll GET /agent-connect/verdict/:id for the verdict card. The seam the
+// Agent Connect demo (and any future buyer) calls; engine untouched.
+app.route('/agent-connect', verdictOracle);
+app.route('/agent-connect', demoRoutes);
 
 // Stellar x402 payment gateway — wraps /x402/* routes with HTTP 402 negotiation.
 // The middleware returns 402 with Stellar payment requirements for unpaid requests
