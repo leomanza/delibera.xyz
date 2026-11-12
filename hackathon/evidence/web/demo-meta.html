@@ -12,52 +12,60 @@
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text);
       font: 14px/1.55 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-    main { max-width: 760px; margin: 0 auto; padding: 36px 20px 70px; }
+    main { max-width: 780px; margin: 0 auto; padding: 36px 20px 70px; }
     h1 { font-size: 19px; margin: 0 0 4px; }
     h1 span { color: var(--accent); }
     .sub { color: var(--dim); font-size: 12.5px; margin-bottom: 28px; }
     h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 26px 0 4px; }
     table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
     td { border-top: 1px solid var(--line); padding: 7px 4px; vertical-align: top; }
-    td:first-child { color: var(--text); white-space: nowrap; width: 160px; }
+    td:first-child { color: var(--text); white-space: nowrap; width: 200px; }
     td:last-child { color: var(--dim); overflow-wrap: anywhere; }
     code { color: var(--accent); }
     .ok { color: var(--ok); }
-    a { color: var(--accent); }
     ul { margin: 4px 0; padding-left: 18px; }
     li { margin: 3px 0; }
+    a { color: var(--accent); }
   </style>
 </head>
 <body>
   <main>
     <h1>Repo meta — <span>how every claim here is checked</span></h1>
-    <p class="sub">No keys in any of these commands. Verifiers are offline; the live path polls
-    pre-existing chain state with a read-only view call.</p>
+    <p class="sub">No keys in any of these commands. The verifiers are offline or read-only; the
+    live rail needs a partner key, which never reaches the browser.</p>
 
-    <h2>Package scripts</h2>
+    <h2>Commands</h2>
     <table>
-      <tr><td><code>npm run fixtures</code></td><td>re-derive verdict cards + settlement plan from the captured fixtures (offline)</td></tr>
-      <tr><td><code>npm test</code></td><td><span class="ok">14 passing</span> — node:test invariants: capsule determinism · ensue SSE parser · fixture shapes · tally rule · no-key scanner sanity</td></tr>
-      <tr><td><code>npm run verify:signing</code></td><td>NEP-413 / NEP-366 signing byte-vs-byte against assets/test-vectors.json</td></tr>
-      <tr><td><code>npm run verify:capsule</code></td><td><span class="ok">offline</span> re-verify digests inside capsule.json against the four fixtures</td></tr>
-      <tr><td><code>npm run verify:ensue74</code></td><td>live cloud cross-check of the #74 capture (read-only)</td></tr>
-      <tr><td><code>npm run judge</code></td><td>9-step sequence: verdict card → policy → refusal → payment → capsule → set-of-keys → precedents → no-key scan</td></tr>
-      <tr><td><code>npm run live:testnet</code></td><td>full coordination loop (testnet) — requires <code>.env</code>; <code>--resume-only</code> to inspect a finished proposal</td></tr>
+      <tr><td><code>npm run judge</code></td><td>the 9-step sequence: the policy, the jury, the bite, the ratification, the payment, the capsule, the chain, the no-key scan</td></tr>
+      <tr><td><code>npm test</code></td><td><span class="ok">21 passing</span> — invariant tests: capsule determinism · tally + quorum · envelope unwrapping · result freshness · fixture shapes</td></tr>
+      <tr><td><code>npm run verify:capsule</code></td><td><span class="ok">offline</span> — re-derive every digest in capsule.json against the fixtures</td></tr>
+      <tr><td><code>npm run verify:tee</code></td><td>the jurors' TEE proofs, verified with NEAR's official verifier (3/3 signatures, 3/3 Intel TDX quotes)</td></tr>
+      <tr><td><code>npm run verify:live</code></td><td>the live precedent: chain state + receipt + live memory + TEE proofs, in one command</td></tr>
+      <tr><td><code>npm run live:rail</code></td><td>the policy rail, live: the agent tries to pay an un-listed destination and the API refuses it before dispatch</td></tr>
+      <tr><td><code>npm run live:testnet</code></td><td>the whole loop with real jurors (testnet; mainnet behind an explicit flag)</td></tr>
     </table>
 
-    <h2>Evidence chain</h2>
+    <h2>Surfaces</h2>
     <ul>
-      <li>captures → <code>fixtures/</code> (policy rev 4 · verdict #74 · vendor refusal · payment receipt)</li>
-      <li>capsule → <code>capsule.json</code> (generated; sha256-pinned; spec cso-capsule/1; git-ignored by design — re-derivable byte-exact via <code>npm run capsule</code>)</li>
-      <li>live receipts → <code>fixtures/live-testnet/proposal-76.json</code> (3 real jurors + coordinator, testnet, 2026-11-08)</li>
-      <li>this UI → <code>web/demo.html</code> (+ <code>web/verify.html</code> offline verifier)</li>
+      <li><a href="./demo.html">demo.html</a> — the narrated run: policy → the 403 bite → the jury → the payment → the capsule.</li>
+      <li><a href="./verify.html">verify.html</a> — drag the capsule + the four fixtures, watch every digest re-derive in your browser.</li>
+      <li><code>/agent-connect/demo</code> — the product's own live session UI (start the coordinator; see the README).</li>
+    </ul>
+
+    <h2>What is proven, and how</h2>
+    <ul>
+      <li><span class="ok">The guardrail biting</span> — the Agent Connect API refused a live transfer to a destination outside the owner-signed whitelist: <code>403 policy_destination_denied</code>, with the provider's own body and <code>request_id</code>. Nothing moved.</li>
+      <li><span class="ok">The jury</span> — three real AI jurors, one dissent, settled on-chain as a proposal on <code>coordinator.agents-coordinator.testnet</code>. The committed hashes still equal the live bytes.</li>
+      <li><span class="ok">The reasoning is TEE-attested</span> — each juror's reply carries a NEAR AI Cloud signature; the signing key is bound to Intel TDX hardware. The proof travels inside the sealed result, so the on-chain commitment covers it.</li>
+      <li><span class="ok">The reasoning stays sealed</span> — only <code>sha256(result)</code> reaches the chain; the text lives in the deliberation store.</li>
     </ul>
 
     <h2>Honest status</h2>
     <ul>
-      <li class="ok">testnet precedent #76: end-to-end loop, real jurors, settlements recorded, correlated receipts persisted.</li>
-      <li>mainnet: contract <code>coordinator.agents-coordinator.near</code> answers (id 0) — <em>no mainnet settlement precedent yet</em>; the live path needs the owner's key (not in this repo, never will be).</li>
-      <li>vendor refusal bite: replayed by design — the $0.02 daily budget at capture time means a re-check cannot be re-attempted live; the refusal receipt is the evidence.</li>
+      <li>The payment leg that follows the owner's signature is a <em>captured</em> receipt (2026-10-19, mainnet rail). The live legs are the refusal, the jury and the settlement.</li>
+      <li>The demo accounts hold NEAR but no USDC, so the agent cannot be funded for a live payment without a top-up — named here rather than papered over.</li>
+      <li>The vendor refusal is not repeatable on demand (the capture's budget is spent); the live refusal is captured against a destination that is not on the whitelist, which the policy forbids regardless of balance.</li>
+      <li>One earlier precedent (#76) settled a wrong tally — a parser bug in our own harness. It is disclosed in the receipt, and the fresh run (#80) is the reference.</li>
     </ul>
 
     <p style="margin-top:26px"><a href="./demo.html">← back to the demo</a></p>

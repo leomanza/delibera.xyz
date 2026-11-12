@@ -65,11 +65,13 @@
     </section>
 
     <section>
-      <h2>2 · The guardrail bites BEFORE dispatch <span class="badge bad">403 refusal</span></h2>
+      <h2>2 · The guardrail bites BEFORE dispatch <span class="badge bad">403 refusal</span><span class="badge ok">live capture</span></h2>
       <div class="refuse">
         <div class="big">403 — policy_destination_denied</div>
-        <div class="kv"><b>tried destination</b><span>ac-owner.delibera.near (not on the whitelist)</span></div>
+        <div class="kv"><b>tried destination</b><span>vendor.near (not on the whitelist)</span></div>
         <div class="kv"><b>who refused</b><span>the Agent Connect API, after checking the owner-signed destinations — checked BEFORE dispatch</span></div>
+        <div class="kv"><b>when</b><span>2026-11-12 03:25 UTC · request_id <code>8844cfc5-5565-4be7-bd52-73a65e8b0a9f</code> · policy rev 4 (APPLIED, provider synced)</span></div>
+        <div class="kv"><b>the provider's words</b><span>"The account's destination rule does not allow this address. Ask the owner to add it to the policy destinations; every grant follows it at once, with no new grant."</span></div>
       </div>
     </section>
 
@@ -97,6 +99,7 @@
 
     <section>
       <h2>5 · Settlement exists — on-chain, verifiable <span class="badge test">live testnet 2026-11-08</span></h2>
+      <div class="kv"><b>the live session</b><span>the product's own UI at <code>/agent-connect/demo</code> — step rail, live API receipts, the owner signature, the 403 anatomy</span></div>
       <div class="kv"><b>same loop, this repo</b><span>proposal <b>#80</b> on <code>coordinator.agents-coordinator.testnet</code> — 3 real jurors voted independently, <b>one dissented</b> (<b>Approved 2-1</b>), and <code>coordinator_resume</code> finalized it. Triple check: sha256(live stored result) == the contract's result_hash commitment, for all three, right now.</span></div>
       <div class="kv"><b>mainnet status</b><span>contract <code>coordinator.agents-coordinator.near</code> exists and answers (id 0) — mainnet settle precedent honestly <b>omitted</b> until run with the owner's key</span></div>
       <div class="kv"><b>payment rails</b><span>NEAR mainnet USDC (native), via the Agent Connect API</span></div>
