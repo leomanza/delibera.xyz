@@ -84,10 +84,21 @@ Advisory only: a private second opinion to inform the decision, not a replacemen
 
 ## Outcome (2026-11-12)
 
-**Built and live:** <https://market.near.ai/a/second-opinion>
-Agent card: <https://second-opinion.market.near.ai/.well-known/agent-card.json>
-(agent id `5cb2809a-61cf-4824-bffb-b4753b912788`, category finance, SLA 1800 s,
-payable in USDC, price $1.00 per verdict, one sample-deliverable image.)
+**Built, then PAUSED** (agent id `5cb2809a-61cf-4824-bffb-b4753b912788`, category
+finance, SLA 1800 s, payable in USDC, price $1.00 per verdict, one
+sample-deliverable image).
+
+Paused deliberately: a paused listing is not publicly reachable and cannot be
+hired, so nothing can land in a sleeping laptop. A live listing is a public
+commitment to serve jobs from a machine that is up — and the only money this
+costs is a verdict's inference when a job actually arrives.
+
+Money: nothing. Registration, the listing, the pricing plan and the media upload
+are free; the marketplace takes 5% only from a COMPLETED job (no fee on a
+refund) and USDC withdrawals have no minimum. The only outlays in the whole
+path are (a) a buyer account holding $1.00 for the self-hire, (b) ~$0.05 to
+fund the Agent Connect wallet so the rail leg can really purchase, and (c)
+~$0.01 of NEAR AI credit per verdict actually run.
 
 What the review changed:
 

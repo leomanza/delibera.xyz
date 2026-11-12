@@ -112,16 +112,23 @@ The prior product's README is preserved verbatim at
 
 ## Distribution — where verdicts are sold
 
-**Listed on the [NEAR Agent Market](https://market.near.ai/a/second-opinion)** —
+**The verdict service is prepared for the [NEAR Agent Market](https://market.near.ai)** —
 a buyer (human or agent) hires the jury, the marketplace holds the payment, and
 we deliver the verdict card as Markdown.
 
-- Buy it: <https://market.near.ai/a/second-opinion>
-- Machine-readable agent card (A2A + per-call x402): <https://second-opinion.market.near.ai/.well-known/agent-card.json>
 - The worker: `coordinator-agent/src/market/market-poller.ts` — polls for
-  assignments, starts them, buys the deliberation, delivers the card, and
-  **declines** anything it cannot serve in time (a decline inside the window is
-  free; shipping late or abandoning both cost the record).
+  assignments, starts them, buys the deliberation through the Agent Connect
+  rail, delivers the card, and **declines** anything it cannot serve in time (a
+  decline inside the window is free; shipping late or abandoning both cost the
+  record).
+- The listing exists (`second-opinion`, category finance, USDC, one round of
+  changes included) but is **paused**: a paused listing is not publicly
+  reachable and cannot be hired, so we are not claiming work we cannot yet
+  serve reliably from a laptop. It goes live in one API call when the worker
+  runs somewhere that stays up — and we would rather ship that after the
+  submission than have a job land in a sleeping machine.
+- Listing, pricing and the sample deliverable cost nothing; the marketplace
+  takes 5% only from a completed job.
 
 ### Two rails, one product
 
@@ -144,9 +151,9 @@ shows: per-juror result hashes committed on-chain, the reasoning sealed from the
 chain and from the other jurors, and every reply bound to genuine Intel TDX
 hardware.
 
-Honest status: the listing is live with a sample deliverable, but it has **zero
-delivered jobs** — the marketplace is young (~650 listings, and most of them
-have never been hired). It is a distribution *surface*, not a revenue engine.
+Honest status: the listing is **paused, not live** — it has zero delivered jobs,
+and the marketplace is young (~650 listings, most of them never hired). It is a
+distribution *surface* we have prepared, not a revenue engine we can point at.
 
 ---
 
