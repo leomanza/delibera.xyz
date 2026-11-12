@@ -18,6 +18,17 @@ interface LiveRail {
   bite?: { refused: boolean; body?: { errors?: Array<{ status?: string; code?: string; layer?: string; title?: string; detail?: string }>; meta?: { request_id?: string } } };
 }
 const RAIL_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'agent-connect', 'live-rail.json');
+/** The known issue recorded on the #76 receipt, if that receipt is present. */
+function loadKnownIssue(): string | null {
+  const f = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'live-testnet', 'proposal-76.json');
+  if (!existsSync(f)) return null;
+  try {
+    const doc = JSON.parse(readFileSync(f, 'utf8')) as { meta?: { knownIssue?: { summary?: string; trueTallyFromLiveBytes?: string } } };
+    const k = doc.meta?.knownIssue;
+    if (!k?.summary) return null;
+    return `${k.summary} ${k.trueTallyFromLiveBytes ?? ''}`.trim();
+  } catch { return null; }
+}
 /** The live capture of the refusal, if we have one. Absent -> the judge falls back to the fixture. */
 function loadLiveRail(): LiveRail | null {
   if (!existsSync(RAIL_FILE)) return null;
@@ -109,7 +120,13 @@ if (mainnetPrecedent) {
   console.log(`  [curl] RPC view get_proposal {"proposal_id":${mainnetPrecedent.proposalId}} on ${mainnetPrecedent.settledOn} (free)`);
 } else {
   console.log(`  contract state: mainnet ${settlement.mainnetLive ? `LIVE (id ${settlement.mainnetId})` : 'not answering'} / testnet ${settlement.testnetLive ? `LIVE (id ${settlement.testnetId})` : 'not answering'}`);
-  console.log('  testnet precedent: proposal 76 finalized via run-live.ts (live 2026-11-08, this repo) — see fixtures/live-testnet/proposal-76.json');
+  // The reference precedent is #80 (Approved 2-1, one juror dissented). #76 is
+  // kept because its receipt carries a disclosed bug — a tally computed on the
+  // wrong bytes. Showing that here is the point: we checked the evidence
+  // instead of trusting it, and the check is in the artifact, not only in prose.
+  console.log('  testnet precedent: proposal 80 finalized via run-live.ts (live 2026-11-11) — Approved 2-1, one juror dissented — see fixtures/live-testnet/proposal-80.json');
+  const known = loadKnownIssue();
+  if (known) console.log(`  disclosed defect in the earlier run (#76): ${known}`);
   console.log('  mainnet settlement line omitted until mainnet precedent — 74 fixture stays testnet-capture labeled');
   console.log('  [curl] RPC view get_proposal {"proposal_id":1} on coordinator.agents-coordinator.near (free)');
 }

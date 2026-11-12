@@ -15,7 +15,7 @@ payment goes through. Everything before that signature is furnace-tested refusal
 **Chain:** NEAR (mainnet) — USDC native `nep141:1720…"133a1`, Agent Connect rail,
 confidential transfers for the jury payment.
 
-## Run the judge (WIP)
+## Run the judge
 
 ```
 npm install
@@ -24,7 +24,8 @@ npm run judge
 
 ~30 seconds, no wallet extension, no live keys: replays real captured receipts
 (evidence hashes, no narrative) and shows the guardrail biting before the owner
-signs. Ships on day 2; today the repo is at the baseline port.
+signs. Every claim is tied to a captured receipt, and the receipts carry their own
+disclosed defects — see `fixtures/live-testnet/proposal-76.json`.
 
 ## Baseline vs window
 
@@ -42,11 +43,13 @@ Real captured evidence lives in [`fixtures/`](fixtures/) and
 
     npm test
 
-14 node:test cases over the pure invariants (no network, no keys): capsule
+21 node:test cases over the pure invariants (no network, no keys): capsule
 byte-determinism, totals in atomic integer strings, ensue SSE/JSON envelope
-parsing, fixture shapes (policy rev 4 / verdict #74 / refusal 403 / receipt),
-tally majority rule, and scanner sanity (`.env` never tracked, capsule never
-committed). Run first: the suite doubles as doc for the pinned shapes.
+parsing, the tally rule (quorum, not a hardcoded majority), the envelope
+unwrap that once produced a wrong verdict, the freshness rule that keeps a
+stale result from being settled, and scanner sanity (`.env` never tracked,
+capsule never committed). Run first: the suite doubles as doc for the pinned
+shapes.
 
 ## Demo UI
 

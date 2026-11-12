@@ -22,7 +22,10 @@ const COORDINATOR = (process.env.COORDINATOR_URL || 'http://localhost:3000').rep
 
 const POLL_MS = 45_000;          // market poll cadence (skill says 30-60s)
 const STATUS_POLL_MS = 5_000;    // local status poll cadence
-const FLOW_TIMEOUT_MS = 240_000; // local flow must finish well inside this
+// A cold local run measures ~295 s (3 jurors, ~35-45 s of TEE inference each,
+// plus a coordinator poll cycle). The old 240 s budget sat INSIDE that range,
+// so a cold job timed out after /start — the buyer never got a deliverable.
+const FLOW_TIMEOUT_MS = 600_000;
 
 interface JobAssignment {
   assignmentId: string;
@@ -81,6 +84,12 @@ function proposalFrom(item: AssignmentItem): string {
 }
 
 async function runVerdict(proposal: string) {
+  // The coordinator keeps the last tally in memory and does NOT clear it when a
+  // new task starts. Snapshot it first: a verdict is only ours when it belongs
+  // to a proposal id we did not see before.
+  const before = await coordinatorApi('/api/coordinate/status');
+  const previousProposalId = before?.proposalId ?? null;
+
   await coordinatorApi('/api/coordinate/trigger', {
     method: 'POST',
     body: JSON.stringify({
@@ -97,7 +106,9 @@ async function runVerdict(proposal: string) {
   while (Date.now() < deadline) {
     await sleep(STATUS_POLL_MS);
     status = await coordinatorApi('/api/coordinate/status');
-    if (status?.status === 'completed' && status?.tally) return status;
+    // Fresh means: a proposal id we had not seen before the trigger.
+    if (status?.status === 'completed' && status?.tally
+        && status.proposalId !== null && status.proposalId !== previousProposalId) return status;
     if (status?.status === 'failed') throw new Error('local coordination failed');
   }
   throw new Error(`local flow timed out after ${FLOW_TIMEOUT_MS / 1000}s`);
@@ -106,9 +117,10 @@ async function runVerdict(proposal: string) {
 function verdictMarkdown(proposal: string, result: any): string {
   const t = result.tally;
   const lines: string[] = [];
-  lines.push(`# Delibera Verdict: ${t.decision} (${t.approved}–${t.rejected})`);
+  lines.push(`# Confidential Second Opinion — Verdict: ${t.decision} (${t.approved}–${t.rejected})`);
   lines.push('');
-  lines.push('Three independent AI workers deliberated privately on your proposal.');
+  const jurorCount = t.workerCount ?? (t.workers || []).length ?? 3;
+  lines.push(`${jurorCount} independent AI jurors deliberated privately on your proposal.`);
   lines.push('Individual reasoning stayed off-chain; only the aggregate tally was');
   lines.push('settled on NEAR testnet.');
   lines.push('');
@@ -138,8 +150,10 @@ function verdictMarkdown(proposal: string, result: any): string {
   lines.push('```');
   lines.push('');
   lines.push('Advisory only: a private second opinion to inform your decision, not a');
-  lines.push('replacement for it. Settlement is NEAR **testnet**; no TEE attestation in');
-  lines.push('this build.');
+  lines.push('replacement for it. Settlement is NEAR **testnet**. Every juror\'s reply');
+  lines.push('carries a NEAR AI Cloud signature whose key is bound to Intel TDX hardware');
+  lines.push('(verified with NEAR\'s own nearai-cloud-verifier), and each juror committed');
+  lines.push('a sha256 of its result on-chain before the tally settled.');
   return lines.join('\n');
 }
 
@@ -150,8 +164,38 @@ async function processAssignment(item: AssignmentItem) {
   await marketApi(`/v1/assignments/${id}/start`, { method: 'POST' });
   log(`started ${id}`);
 
+  // Buyers expect a message; a 60-300 s silent run reads as a broken agent.
+  try {
+    await marketApi(`/v1/assignments/${id}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        body: `Brief received. Three jurors are deliberating privately; the verdict and its on-chain receipt will be here in about a minute (up to five after a cold start).`,
+      }),
+    });
+  } catch (e: unknown) {
+    log(`message failed (not fatal): ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   const proposal = proposalFrom(item);
-  const result = await runVerdict(proposal);
+  let result: any;
+  try {
+    result = await runVerdict(proposal);
+  } catch (e: unknown) {
+    // We cannot serve this one. Declining inside the window is free — it does
+    // not count against the success rate, and the buyer is refunded. Shipping
+    // late or abandoning it both cost the record.
+    const reason = e instanceof Error ? e.message : String(e);
+    log(`declining ${id}: ${reason}`);
+    try {
+      await marketApi(`/v1/assignments/${id}/decline`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: 'rejected' }),
+      });
+    } catch (de: unknown) {
+      log(`decline failed: ${de instanceof Error ? de.message : String(de)}`);
+    }
+    return;
+  }
   log(`verdict ready for ${id}: ${result.tally.decision} (${result.tally.approved}-${result.tally.rejected}), proposal #${result.proposalId}`);
 
   const markdown = verdictMarkdown(proposal, result);

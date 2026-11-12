@@ -58,7 +58,7 @@ What you just saw, step by step:
 Also:
 
 ```sh
-npm test                      # 18 invariant tests — offline, no keys
+npm test                      # 21 invariant tests — offline, no keys
 npm run verify:capsule        # re-derive the capsule digests
 open web/demo.html            # narrated run: policy → 403 bite → jurors → payment → capsule
 open web/verify.html          # drag capsule.json + the 4 fixtures → digests re-derived in-browser
@@ -90,6 +90,7 @@ git log --oneline pre-hackathon..hackathon
 | **The guardrail biting live** — the Agent Connect API refuses a live transfer to a destination outside the owner-signed whitelist: `403 policy_destination_denied`, provider's own body and `request_id` captured | `hackathon/evidence/fixtures/agent-connect/live-rail.json` |
 | **TEE proof for the jurors' reasoning** — the NEAR AI Cloud signature of each juror's reply is verified with **NEAR's own official verifier**, and the signing key is shown to be bound to genuine Intel TDX hardware | `npm run verify:tee` in `hackathon/evidence` |
 | **Jury size as a parameter** — `--jurors N --quorum K`; the contract already stored `expected_worker_count`/`quorum` | `hackathon/evidence/scripts/run-live.ts` |
+| **An Agent Market worker for the verdict service** — polls the marketplace for jobs, runs the private jury, delivers the verdict card as Markdown | `coordinator-agent/src/market/` |
 
 **Baseline** (pre-window, reused and disclosed per the rules — own libraries
 count as baseline, they are listed here rather than claimed as new):
