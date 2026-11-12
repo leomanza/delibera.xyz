@@ -194,7 +194,18 @@ export async function updatePolicyDestinations(agentId: string, addAddress: stri
   const policy = { ...view.policy };
   delete policy.revision;
   delete policy.usage;
-  policy.destinations.list.push({ action: 'transfer', address: addAddress, confidential: false });
+  // A transfer destination must be a CONFIDENTIAL account: the agent's
+  // balances are confidential, so the API rejects the WHOLE policy document
+  // if any transfer destination carries confidential:false ("A transfer
+  // destination must be a confidential account").
+  //
+  // The list is normalised before it goes back, because the policy this
+  // agent carries was written before that rule was enforced — it still holds
+  // one destination with confidential:false, and echoing it back verbatim
+  // makes every policy_update fail validation.
+  policy.destinations.list = policy.destinations.list.map((d: { action: string; confidential?: boolean }) =>
+    (d.action === 'transfer' ? { ...d, confidential: true } : d));
+  policy.destinations.list.push({ action: 'transfer', address: addAddress, confidential: true });
   const gen = await http('/v1/generate-intent', {
     method: 'POST',
     body: JSON.stringify({ type: 'policy_update', agent_id: agentId, policy, expected_revision: view.revision }),

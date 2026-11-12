@@ -70,6 +70,10 @@ async function probeWorker(worker: WorkerRecord, timeoutMs = 3000): Promise<bool
     });
     if (!res.ok) return false;
     const body = await res.json() as { workerDid?: string };
+    // Compare the identity only when we actually have one to compare. The
+    // local fallback list carries short ids ("worker1"), not DIDs — comparing
+    // them against the worker's real DID made every local worker look dead.
+    if (!worker.worker_did?.startsWith('did:')) return true;
     return !body.workerDid || body.workerDid === worker.worker_did;
   } catch {
     return false;
@@ -123,7 +127,11 @@ async function getActiveWorkers(): Promise<WorkerRecord[]> {
           `[discovery] ${dropped} registered worker(s) unreachable, skipping: ${deadDids.join(', ')}`,
         );
       }
-      return reachable;
+      // Registered-but-dead is the same as an empty registry: fall through to
+      // the local list instead of returning nothing (a stale registry entry
+      // must not be able to block a local run).
+      if (reachable.length > 0) return reachable;
+      console.warn('[discovery] no registered worker answered — falling back to the local list');
     }
   } catch (err) {
     console.warn('[discovery] Registry query failed, falling back to WORKERS env:', err);

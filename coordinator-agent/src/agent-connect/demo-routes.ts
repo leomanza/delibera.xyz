@@ -70,6 +70,8 @@ interface Session {
   events: TraceEvent[];
   pendingCreate?: any;
   biteTarget?: string;
+  purchaseFailed?: boolean;
+  policy?: { revision?: number; status?: string; destinations?: { list?: Array<{ address: string }> } } | null;
 }
 
 const sessions = new Map<string, Session>();
@@ -129,6 +131,7 @@ demoRoutes.post('/demo/session', async (c) => {
     try { policy = await policyView(session.agentId); } catch { /* advisory */ }
     // narrative: pre-ratification state (the vendor was ratified to rev 4 on Oct-19)
     if (policy?.revision === 4) policy = { ...policy, narrative: 'rev 4 is the ratified state — this demo replays rev 3 → 4' };
+    session.policy = policy;   // the ratification leg reads it
   } else if (mode === 'replay') {
     session.agentId = FIXTURE_AGENT.agentId;
     pub = toBalances(RECEIPTS.balances.public, 'public');
@@ -195,28 +198,47 @@ demoRoutes.post('/demo/:sid/propose', async (c) => {
   session.disclosure = disclosure;
 
   if (session.mode === 'live') {
-    // confidential transfer spends from the shielded balance — shield first if short
-    const conf = await balances(session.agentId, 'confidential');
-    const confBal = BigInt(conf.find((b: any) => b.asset_id === USDC)?.balance_raw || '0');
-    if (confBal < 10_000n) {
-      const sh = await shield(session.agentId, USDC, '10000', `sh:${session.id}:propose`);
-      note(session, `shield $0.01 → confidential (${sh.status})`);
+    // The purchase leg is real, and it can genuinely fail — the demo account
+    // holds no USDC. A failed purchase must not take the whole demo down, so
+    // it is recorded as an event (with the provider's own error) and the run
+    // continues in a clearly-labelled degraded mode.
+    let purchaseFailed = false;
+    try {
+      // confidential transfer spends from the shielded balance — shield first if short
+      const conf = await balances(session.agentId, 'confidential');
+      const confBal = BigInt(conf.find((b: any) => b.asset_id === USDC)?.balance_raw || '0');
+      if (confBal < 10_000n) {
+        const sh = await shield(session.agentId, USDC, '10000', `sh:${session.id}:propose`);
+        note(session, `shield $0.01 → confidential (${sh.status})`);
+        ev(session, {
+          phase: 'shield', title: 'Shield $0.01 → confidential balance', source: 'live',
+          api: { method: 'POST', path: `/v1/agents/${session.agentId}/shield`, idempotencyKey: `sh:${session.id}:propose` },
+          statuses: [{ status: sh.status, at: now() }],
+        });
+        await sleep(1);
+      }
+      const pay = await transfer(session.agentId, ORACLE, '10000', true, `tr:${session.id}:oracle`);
+      note(session, `$0.01 confidential → ${ORACLE} (${pay.status})`);
       ev(session, {
-        phase: 'shield', title: 'Shield $0.01 → confidential balance', source: 'live',
-        api: { method: 'POST', path: `/v1/agents/${session.agentId}/shield`, idempotencyKey: `sh:${session.id}:propose` },
-        statuses: [{ status: sh.status, at: now() }],
+        phase: 'transfer', title: 'Buy the verdict — $0.01 confidential → ac-oracle', source: 'live',
+        api: { method: 'POST', path: `/v1/agents/${session.agentId}/transfer`, idempotencyKey: `tr:${session.id}:oracle` },
+        statuses: [{ status: pay.status, at: now() }], provider: 'outlayer',
+        correlationId: pay.correlationId,
+        note: pay.status === 'UNCERTAIN' ? 'maybe executed — polling the original correlation_id' : 'confidential transfer — the chain never sees amount or recipient',
       });
-      await sleep(1);
+    } catch (e: unknown) {
+      const err = e as AgentApiError;
+      purchaseFailed = true;
+      note(session, `purchase leg failed: ${err.code}`);
+      ev(session, {
+        phase: 'transfer', title: 'Buy the verdict — REFUSED', source: 'live',
+        api: { method: 'POST', path: `/v1/agents/${session.agentId}/transfer`, idempotencyKey: `tr:${session.id}:oracle` },
+        statuses: [{ status: err.code, at: now() }],
+        code: err.code,
+        note: 'The purchase leg failed for real — the demo account holds no USDC. The deliberation continues so the rest of the flow is visible; the funded purchase is in the captured receipt.',
+      });
     }
-    const pay = await transfer(session.agentId, ORACLE, '10000', true, `tr:${session.id}:oracle`);
-    note(session, `$0.01 confidential → ${ORACLE} (${pay.status})`);
-    ev(session, {
-      phase: 'transfer', title: 'Buy the verdict — $0.01 confidential → ac-oracle', source: 'live',
-      api: { method: 'POST', path: `/v1/agents/${session.agentId}/transfer`, idempotencyKey: `tr:${session.id}:oracle` },
-      statuses: [{ status: pay.status, at: now() }], provider: 'outlayer',
-      correlationId: pay.correlationId,
-      note: pay.status === 'UNCERTAIN' ? 'maybe executed — polling the original correlation_id' : 'confidential transfer — the chain never sees amount or recipient',
-    });
+    session.purchaseFailed = purchaseFailed;
     const record = startDeliberation(proposal);
     session.verdictId = record.id;
     note(session, `deliberation started (${record.id})`);
@@ -335,24 +357,74 @@ demoRoutes.post('/demo/:sid/ratify', async (c) => {
     });
   }
 
-  const ratifyInfo = await updatePolicyDestinations(session.agentId, VENDOR);
+  // The destination to open: the one the bite was refused for, if any — that
+  // is the coherent story (refused → signed → paid). Otherwise the vendor.
+  const target = session.biteTarget || VENDOR;
+  const alreadyListed = (() => {
+    try {
+      const list = (session.policy?.destinations?.list || []) as Array<{ address: string }>;
+      return list.some((d) => d.address === target);
+    } catch { return false; }
+  })();
+
+  let ratifyInfo: Awaited<ReturnType<typeof updatePolicyDestinations>> | null = null;
+  if (alreadyListed) {
+    // Signing a change that would add a destination already on the list is
+    // not a change. Say so instead of pretending.
+    note(session, `${target} is already whitelisted at revision ${session.policy?.revision} — no signature needed`);
+    ev(session, {
+      phase: 'policy', title: 'Already whitelisted — no signature needed', source: 'live',
+      api: { method: 'GET', path: `/v1/agents/${session.agentId}/policy` },
+      statuses: [{ status: String(session.policy?.status || 'APPLIED'), at: now() }],
+      note: `${target} joined the whitelist at revision ${session.policy?.revision}. The 2026-10-19 capture shows the signature that added it.`,
+    });
+  } else {
+    try {
+      ratifyInfo = await updatePolicyDestinations(session.agentId, target);
+      note(session, `owner signature: ${target} added to whitelist`);
+      ev(session, {
+        phase: 'signature', title: 'Owner signs the policy change (NEP-413)', source: 'live',
+        api: { method: 'POST', path: '/v1/submit-intent {type: policy_update}' },
+        note: ratifyInfo?.message ? `${ratifyInfo.message} · ${ratifyInfo.standard}` : 'submit policy_update (owner-signed)',
+      });
+      ev(session, {
+        phase: 'policy', title: 'Policy in force — provider synced', source: 'live',
+        api: { method: 'GET', path: `/v1/agents/${session.agentId}/policy` },
+        statuses: [{ status: 'APPLIED', at: now() }, { status: 'provider_policy_synced', at: now() }],
+        note: `destination added: ${target} · revision ${ratifyInfo?.revision || 'next'}`,
+      });
+    } catch (e: unknown) {
+      const err = e as AgentApiError;
+      note(session, `policy_update failed: ${err.code}`);
+      ev(session, {
+        phase: 'signature', title: 'Policy update REFUSED', source: 'live',
+        api: { method: 'POST', path: '/v1/submit-intent {type: policy_update}' },
+        statuses: [{ status: err.code, at: now() }],
+        code: err.code,
+        note: 'the provider refused the policy change — the rule held',
+      });
+      return c.json({ ok: false, code: err.code, message: err.message, events: session.events }, 409);
+    }
+  }
   session.ratified = true;
-  note(session, `owner signature: ${VENDOR} added to whitelist`);
-  ev(session, {
-    phase: 'signature', title: 'Owner signs the policy change (NEP-413)', source: 'live',
-    api: { method: 'POST', path: '/v1/submit-intent {type: policy_update}' },
-    note: ratifyInfo?.message ? `${ratifyInfo.message} · ${ratifyInfo.standard}` : 'submit policy_update (owner-signed)',
-  });
-  ev(session, {
-    phase: 'policy', title: 'Policy in force — provider synced', source: 'live',
-    api: { method: 'GET', path: `/v1/agents/${session.agentId}/policy` },
-    statuses: [{ status: 'APPLIED', at: now() }, { status: 'provider_policy_synced', at: now() }],
-    note: `destination added: ${VENDOR} · revision ${ratifyInfo?.revision || 'next'}`,
-  });
-  const spend = await transfer(session.agentId, VENDOR, '10000', false, `tr:${session.id}:vendor`);
+  let spend: Awaited<ReturnType<typeof transfer>>;
+  try {
+    spend = await transfer(session.agentId, target, '10000', true, `tr:${session.id}:vendor`);
+  } catch (e: unknown) {
+    const err = e as AgentApiError;
+    note(session, `vendor payment failed: ${err.code}`);
+    ev(session, {
+      phase: 'transfer', title: 'Pay the vendor — REFUSED', source: 'live',
+      api: { method: 'POST', path: `/v1/agents/${session.agentId}/transfer`, idempotencyKey: `tr:${session.id}:vendor` },
+      statuses: [{ status: err.code, at: now() }],
+      code: err.code,
+      note: 'the payment did not go through — the funded leg is in the captured receipt',
+    });
+    return c.json({ ok: false, code: err.code, message: err.message, events: session.events }, 409);
+  }
   note(session, `$0.01 → ${VENDOR} (${spend.status}, ${spend.txHash || spend.correlationId})`);
   ev(session, {
-    phase: 'transfer', title: 'Pay the vendor — $0.01 → ac-owner', source: 'live',
+    phase: 'transfer', title: `Pay the vendor — $0.01 → ${target}`, source: 'live',
     api: { method: 'POST', path: `/v1/agents/${session.agentId}/transfer`, idempotencyKey: `tr:${session.id}:vendor` },
     statuses: [{ status: spend.status, at: now() }], provider: 'outlayer',
     correlationId: spend.correlationId,

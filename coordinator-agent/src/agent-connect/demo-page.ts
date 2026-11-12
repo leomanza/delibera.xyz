@@ -79,6 +79,16 @@ export const DEMO_HTML = `<!doctype html>
   .sigbox { border:1px dashed #4a3d1c; border-radius:10px; padding:10px 12px; margin:10px 0; font-family:ui-monospace,monospace; font-size:11px; color:var(--amb); white-space:pre-wrap; word-break:break-all; }
   .copy { border:1px solid #3a3d44; background:transparent; color:var(--mut); border-radius:6px; font-size:10px; padding:2px 7px; cursor:pointer; margin-left:6px; }
   .copy:hover { color:var(--ink); }
+  /* live log — the terminal pane the Delibera app got right */
+  .logbox { background:#08090b; border:1px solid #262b31; border-radius:8px; padding:7px 8px; max-height:280px; overflow-y:auto; }
+  .logbox:empty::after { content:'waiting for the first call…'; color:#4c545c; font-size:10.5px; }
+  .logline { display:flex; gap:7px; align-items:baseline; padding:1.5px 0; font-size:10.5px; line-height:1.45; color:var(--mut); white-space:nowrap; }
+  .logline .t { color:#464e56; flex-shrink:0; }
+  .logline .p { color:var(--acc); flex-shrink:0; min-width:58px; }
+  .logline .x { color:var(--ink); }
+  .logline .m { color:#0c0d10; background:var(--acc); border-radius:4px; padding:0 4px; font-size:9.5px; font-weight:700; }
+  .logline .bad { color:#ff6b6b; }
+  .logline .ok { color:var(--acc); }
 </style>
 </head>
 <body>
@@ -101,6 +111,7 @@ export const DEMO_HTML = `<!doctype html>
     <div class="railcard" id="policyCard"><h4>Owner-signed policy</h4><div class="muted">…</div></div>
     <div class="railcard" id="balCard"><h4>Agent wallet</h4><div class="muted">…</div></div>
     <div class="railcard" id="evCard"><h4>Verifiable receipts</h4><div class="muted">—</div></div>
+    <div class="railcard"><h4>Live log</h4><div class="logbox" id="log"></div></div>
     <!-- honesty card (removed at user request) — badges data still served by /demo/session -->
   </aside>
 </div>
@@ -141,6 +152,57 @@ function trace(ev){
   if(ev.note) out+='<div class="muted" style="margin-top:6px">'+esc(ev.note)+'</div>';
   return out+'</div>';
 }
+
+/* Live log — the same shape the Delibera app used: poll, and append a line
+ * for every state change, with the API call that caused it. */
+var LOGSEEN={}, JURSEEN={};
+function logLine(html){
+  var box=$('log'); if(!box) return;
+  var d=document.createElement('div'); d.className='logline'; d.innerHTML=html;
+  box.appendChild(d); while(box.children.length>60) box.removeChild(box.firstChild);
+  box.scrollTop=box.scrollHeight;
+}
+function logEvent(e){
+  var a=e.api||{};
+  var key=(e.phase||'')+'|'+(e.correlationId||'')+'|'+(a.path||'')+'|'+((e.statuses||[]).length);
+  if(LOGSEEN[key]) return; LOGSEEN[key]=1;
+  var t=new Date().toISOString().slice(11,19);
+  var m='<span class="t">'+t+'</span><span class="p">'+esc(e.phase||'event')+'</span>';
+  if(a.method) m+='<span class="m">'+esc(a.method)+'</span>';
+  if(a.path) m+='<span>'+esc(String(a.path).replace('/v1/agents/','…'))+'</span>';
+  var sts=e.statuses||[];
+  if(sts.length) m+='<span class="x">'+esc(sts[sts.length-1].status)+'</span>';
+  if(e.code) m+='<span class="'+(e.code==='policy_destination_denied'?'bad':'x')+'">'+esc(e.code)+'</span>';
+  if(e.correlationId) m+='<span class="t">'+esc(String(e.correlationId).slice(0,16))+'…</span>';
+  logLine(m);
+}
+async function pollLog(){
+  if(!S.sessionId) return;
+  try{
+    var d=await api('/demo/'+S.sessionId+'/events');
+    S.events=d.events||[];
+    for(var i=0;i<S.events.length;i++) logEvent(S.events[i]);
+    renderRail();
+  }catch(e){ /* the session may not be up yet */ }
+}
+/* The jury feed — the coordinator's own view, polled while they deliberate.
+ * Each line is one juror landing: their vote, their DID, their commitment. */
+async function pollJurors(){
+  try{
+    var st=await (await fetch('/api/coordinate/status')).json();
+    if(!st||!st.proposalId) return;
+    var p=await (await fetch('/api/coordinate/proposals/'+st.proposalId)).json();
+    var ws=(p&&p.tally&&p.tally.workers)||[];
+    for(var i=0;i<ws.length;i++){
+      var w=ws[i]||{}; var did=w.workerId||('juror'+(i+1));
+      if(JURSEEN[did]) continue; JURSEEN[did]=1;
+      var vote=(w.output&&w.output.vote)||'?';
+      var t=new Date().toISOString().slice(11,19);
+      logLine('<span class="t">'+t+'</span><span class="p">juror</span><span class="'+(vote==='Approved'?'ok':'bad')+'">'+esc(vote)+'</span><span>'+esc(String(did).slice(0,24))+'…</span><span class="t">sealed</span>');
+    }
+  }catch(e){ /* the coordinator may not be up */ }
+}
+function startLive(){ pollLog(); setInterval(pollLog,1500); pollJurors(); setInterval(pollJurors,2000); }
 
 function renderRail(){
   var p=S.policy||{};
@@ -191,7 +253,7 @@ async function boot(){
   var roles='';
   for(var j=0;j<(d.roles||[]).length;j++){ roles+='<div class="role"><b>'+esc(d.roles[j].role)+'</b>'+esc(d.roles[j].who)+'</div>'; }
   $('roles').innerHTML=roles;
-  renderRail(); setStep(1);
+  renderRail(); setStep(1); startLive();
   var presets='';
   for(var k=0;k<S.presets.length;k++){ presets+='<button class="ghost preset" data-p="'+S.presets[k].id+'">'+esc(S.presets[k].label)+'</button>'; }
   $('app').innerHTML='<div class="card"><h3>Request a spend</h3>'
