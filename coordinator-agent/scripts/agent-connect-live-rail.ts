@@ -149,10 +149,15 @@ async function main(): Promise<number> {
     return 2;
   }
   console.log(`\n[1] the agent tries to pay ${refused} (not on the whitelist) — $0.01`);
+  // The account's funds live in its CONFIDENTIAL balance, so the transfer must
+  // be confidential: with confidential:false the API refuses earlier, with
+  // public_balance_exit_only — a different refusal than the one we are here
+  // to show. With confidential:true the DESTINATION rule is what refuses.
+  receipt.meta.accountMode = 'confidential';
   let bite: { refused: boolean; body?: RefusalBody };
   let grantToken: string | undefined = undefined;
   try {
-    const pay = await transfer(agentId, refused, AMOUNT, false, undefined, grantToken);
+    const pay = await transfer(agentId, refused, AMOUNT, true, undefined, grantToken);
     bite = { refused: false };
     console.log(`  ⚠ THE TRANSFER WENT THROUGH — the guardrail did not hold.`);
     console.log(`    status ${pay.status} · correlation ${pay.correlationId} · tx ${pay.txHash ?? '—'}`);
@@ -174,7 +179,7 @@ async function main(): Promise<number> {
         return 2;
       }
       try {
-        const pay = await transfer(agentId, refused, AMOUNT, false, undefined, grantToken);
+        const pay = await transfer(agentId, refused, AMOUNT, true, undefined, grantToken);
         bite = { refused: false };
         console.log(`  ⚠ THE TRANSFER WENT THROUGH — the guardrail did not hold.`);
         receipt.bite = { refused: false, status: pay.status, correlationId: pay.correlationId, txHash: pay.txHash ?? null };

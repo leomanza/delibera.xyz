@@ -69,6 +69,7 @@ interface Session {
   log: string[];
   events: TraceEvent[];
   pendingCreate?: any;
+  biteTarget?: string;
 }
 
 const sessions = new Map<string, Session>();
@@ -376,20 +377,37 @@ demoRoutes.post('/demo/:sid/force-spend', async (c) => {
   const session = sessions.get(c.req.param('sid'));
   if (!session) return c.json({ error: 'unknown session' }, 404);
   if (session.mode === 'live') {
-    // safety: if the vendor is already whitelisted, the bite would move REAL funds.
-    // never push the button then — a destinations-only policy_update must remove it first.
+    // The bite must target a destination that is NOT whitelisted — if it were,
+    // the "refusal" would move real funds instead of refusing them.
+    const body = (await c.req.json().catch(() => ({}))) as { destination?: string };
+    let target = body.destination;
     try {
       const pv = await policyView(session.agentId);
-      const has = (pv?.policy?.destinations?.list || []).some((d: any) => d.address === VENDOR);
-      if (has) {
-        note(session, 'bite suppressed: vendor already whitelisted (policy rev ' + pv.revision + ')');
-        return c.json({ refused: 'suppressed', reason: 'vendor already whitelisted — this bite would move real funds. Run a destinations-only policy_update removing the vendor first (10-min cooldown applies).' }, 400);
+      const listed = (pv?.policy?.destinations?.list || []) as Array<{ address: string }>;
+      const onList = (a: string) => listed.some((d) => d.address === a);
+      if (!target) {
+        // First candidate that the policy does NOT allow — that is what makes
+        // the refusal reproducible without touching the whitelist.
+        target = [VENDOR, 'vendor.near', 'payee-unlisted-demo.near'].find((a) => !onList(a));
       }
+      if (!target) {
+        note(session, 'bite suppressed: every candidate destination is whitelisted');
+        return c.json({ refused: 'suppressed', reason: 'every candidate destination is already whitelisted — a destinations-only policy_update must remove one first (10-min cooldown applies).' }, 400);
+      }
+      if (onList(target)) {
+        note(session, `bite suppressed: ${target} is whitelisted`);
+        return c.json({ refused: 'suppressed', reason: `${target} is already whitelisted — this bite would move real funds. Run a destinations-only policy_update removing it first (10-min cooldown applies).` }, 400);
+      }
+      session.biteTarget = target;
     } catch { /* policy read failed — do not push blind */ }
   }
+  const target = session.biteTarget || VENDOR;
   try {
-    const spend = await transfer(session.agentId, VENDOR, '10000', false, `tr:${session.id}:bite`);
-    note(session, `UNEXPECTED: vendor transfer went through (${spend.status})`);
+    // confidential:true — the account's funds live in the confidential balance, and
+    // only then does the DESTINATION rule refuse (with confidential:false the API
+    // refuses earlier, on the balance mode).
+    const spend = await transfer(session.agentId, target, '10000', true, `tr:${session.id}:bite`);
+    note(session, `UNEXPECTED: transfer to ${target} went through (${spend.status})`);
     return c.json({ refused: false, spend });
   } catch (err) {
     const e = err as AgentApiError;
@@ -404,7 +422,7 @@ demoRoutes.post('/demo/:sid/force-spend', async (c) => {
         : 'owner-signed destinations (Agent Connect API pre-dispatch check)',
       note: session.mode === 'replay'
         ? `${RECEIPTS.refusal.replayNote} · REPLAY of the 2026-10-19 live refusal`
-        : 'Nothing moved. Same-key replay returns the refusal; only an owner-signed policy_update opens a destination.',
+        : `Nothing moved. ${target} is not on the owner-signed whitelist, so the API refused before dispatch.`,
     });
     return c.json({ refused: true, code: e.code, message: e.message, events: session.events, receipt: session.mode === 'replay' ? RECEIPTS.refusal : undefined });
   }

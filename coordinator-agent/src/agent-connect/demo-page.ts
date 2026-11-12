@@ -14,7 +14,7 @@ export const DEMO_HTML = `<!doctype html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Delibera — confidential deliberation for agents</title>
+<title>Confidential Second Opinion — a wallet that can only buy a second opinion</title>
 <style>
   :root { color-scheme: dark; --bg:#0b0d10; --panel:#131619; --panel2:#16191d; --line:#262b31; --ink:#e8e6e1; --mut:#9a968c; --dim:#6e6a62; --acc:#c8f560; --priv:#a78bfa; --bad:#ff6b6b; --amb:#ffc861; }
   * { box-sizing: border-box; }
@@ -85,7 +85,7 @@ export const DEMO_HTML = `<!doctype html>
 <div class="wrap">
   <main id="main">
     <h1>Agents buy their own second opinions — privately.</h1>
-    <p class="sub">Delibera — confidential deliberation for autonomous agents, on NEAR Agent Connect. A wallet whose only autonomous power is buying a confidential verdict from a 3-juror AI council; everything else waits for the owner's signature. Receipts on-chain, opinions sealed. Verifiable receipts on the right.</p>
+    <p class="sub">Confidential Second Opinion — a wallet whose only autonomous power is buying a second opinion, on NEAR Agent Connect. A wallet whose only autonomous power is buying a confidential verdict from a 3-juror AI council; everything else waits for the owner's signature. Receipts on-chain, opinions sealed. Verifiable receipts on the right.</p>
     <div class="bar" id="chips"><span class="chip">booting…</span></div>
     <div class="roles" id="roles"></div>
     <div class="steps" id="steps">

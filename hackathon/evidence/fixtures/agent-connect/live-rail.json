@@ -1,6 +1,6 @@
 {
   "meta": {
-    "capturedAt": "2026-11-12T03:25:06.810Z",
+    "capturedAt": "2026-11-12T10:25:01.684Z",
     "api": "https://api.demo.agentsonintents.com",
     "agentId": "c6b8a14d6b2fdd22e6a8c5182955f1dbca86453d71de4ce3e6cf8c96613ed889",
     "policyRevision": 4,
@@ -14,8 +14,8 @@
     "budget": {
       "daily": {
         "limit_usd": "0.20",
-        "spent_usd": "0.000000",
-        "remaining_usd": "0.200000",
+        "spent_usd": "0.009996",
+        "remaining_usd": "0.190004",
         "resets_at": "2026-11-13T01:00:15.331Z"
       },
       "weekly": {
@@ -26,12 +26,13 @@
       },
       "monthly": {
         "limit_usd": "0.20",
-        "spent_usd": "0.029997",
-        "remaining_usd": "0.170003",
+        "spent_usd": "0.039993",
+        "remaining_usd": "0.160007",
         "resets_at": "2026-11-19T01:00:15.331Z"
       }
     },
-    "ownerAccount": "ac-owner.delibera.near"
+    "ownerAccount": "ac-owner.delibera.near",
+    "accountMode": "confidential"
   },
   "bite": {
     "refused": true,
@@ -46,7 +47,7 @@
         }
       ],
       "meta": {
-        "request_id": "8844cfc5-5565-4be7-bd52-73a65e8b0a9f"
+        "request_id": "4ac9b97e-d300-427c-beab-481408abd7f2"
       }
     },
     "message": "403 policy_destination_denied: {\"errors\":[{\"status\":\"403\",\"code\":\"policy_destination_denied\",\"layer\":\"policy\",\"title\":\"Policy destination denied\",\"detail\":\"The account's destination rule does not allow this address. Ask the owner t"
