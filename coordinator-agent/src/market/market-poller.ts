@@ -20,6 +20,7 @@ const MARKET = (process.env.MARKET_BASE_URL || 'https://market.near.ai').replace
 const TOKEN = process.env.MARKET_API_TOKEN || '';
 const COORDINATOR = (process.env.COORDINATOR_URL || 'http://localhost:3000').replace(/\/$/, '');
 
+const USDC_ASSET = 'nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1';
 const POLL_MS = 45_000;          // market poll cadence (skill says 30-60s)
 const STATUS_POLL_MS = 5_000;    // local status poll cadence
 // A cold local run measures ~295 s (3 jurors, ~35-45 s of TEE inference each,
@@ -83,6 +84,38 @@ function proposalFrom(item: AssignmentItem): string {
   return `Title: ${title}\n\n${description}`.slice(0, 4000);
 }
 
+/**
+ * The Agent Connect leg: buy the deliberation with the policy-bounded wallet.
+ *
+ * This is what makes the listing the same product as the demo. The wallet is
+ * an agent account whose spend is governed by an owner-signed policy on the
+ * NEAR Intents Agent API: a destination whitelist (the oracle only), a USD
+ * budget and a per-transaction cap. So every verdict sold through the
+ * marketplace is purchased through the same rail the product is about — and a
+ * wallet that cannot spend anywhere else cannot be drained by a job.
+ *
+ * If the wallet is short or the rail refuses, the job still runs and the
+ * deliverable says so plainly. A verdict we could not buy is not a reason to
+ * leave a buyer without an answer.
+ */
+async function buyVerdictViaRail(): Promise<{ paid: boolean; detail: string }> {
+  const oracle = process.env.AGENT_CONNECT_ORACLE_ACCOUNT || 'ac-oracle.delibera.near';
+  try {
+    const { transfer, balances } = await import('../agent-connect/client.js');
+    const agentId = process.env.AGENT_CONNECT_AGENT_ID;
+    if (!agentId) return { paid: false, detail: 'no Agent Connect agent configured' };
+    const bal = await balances(agentId, 'confidential') as { balances?: Array<{ asset_id: string; balance_raw: string }> };
+    const usdc = (bal?.balances ?? []).find((b) => b.asset_id === USDC_ASSET);
+    const have = BigInt(usdc?.balance_raw ?? '0');
+    if (have < 10_000n) return { paid: false, detail: `confidential balance is ${have} atomic units, below the $0.01 the verdict costs` };
+    const pay = await transfer(agentId, oracle, '10000', true, `tr:market:${Date.now()}`);
+    return { paid: pay.status === 'SUCCESS' || pay.status === 'UNCERTAIN', detail: `$0.01 confidential transfer → ${oracle} (${pay.status}${pay.correlationId ? ', correlation ' + pay.correlationId : ''})` };
+  } catch (e: unknown) {
+    const err = e as { code?: string; message?: string };
+    return { paid: false, detail: `the rail refused: ${err.code ?? err.message ?? 'unknown error'}` };
+  }
+}
+
 async function runVerdict(proposal: string) {
   // The coordinator keeps the last tally in memory and does NOT clear it when a
   // new task starts. Snapshot it first: a verdict is only ours when it belongs
@@ -114,10 +147,15 @@ async function runVerdict(proposal: string) {
   throw new Error(`local flow timed out after ${FLOW_TIMEOUT_MS / 1000}s`);
 }
 
-function verdictMarkdown(proposal: string, result: any): string {
+function verdictMarkdown(proposal: string, result: any, rail?: { paid: boolean; detail: string }): string {
   const t = result.tally;
   const lines: string[] = [];
   lines.push(`# Confidential Second Opinion — Verdict: ${t.decision} (${t.approved}–${t.rejected})`);
+  if (rail) {
+    lines.push('');
+    lines.push(`**Purchased through the policy rail:** ${rail.detail}`);
+    if (!rail.paid) lines.push('_(the wallet could not buy this deliberation — see the note below)_');
+  }
   lines.push('');
   const jurorCount = t.workerCount ?? (t.workers || []).length ?? 3;
   lines.push(`${jurorCount} independent AI jurors deliberated privately on your proposal.`);
@@ -177,6 +215,9 @@ async function processAssignment(item: AssignmentItem) {
   }
 
   const proposal = proposalFrom(item);
+  // Buy the deliberation first — the same rail the product is about.
+  const rail = await buyVerdictViaRail();
+  log(`rail leg: ${rail.detail}`);
   let result: any;
   try {
     result = await runVerdict(proposal);
@@ -198,7 +239,7 @@ async function processAssignment(item: AssignmentItem) {
   }
   log(`verdict ready for ${id}: ${result.tally.decision} (${result.tally.approved}-${result.tally.rejected}), proposal #${result.proposalId}`);
 
-  const markdown = verdictMarkdown(proposal, result);
+  const markdown = verdictMarkdown(proposal, result, rail);
   await marketApi(`/v1/assignments/${id}/submit`, {
     method: 'POST',
     body: JSON.stringify({ deliverableMarkdown: markdown }),

@@ -110,6 +110,46 @@ The prior product's README is preserved verbatim at
 
 ---
 
+## Distribution — where verdicts are sold
+
+**Listed on the [NEAR Agent Market](https://market.near.ai/a/second-opinion)** —
+a buyer (human or agent) hires the jury, the marketplace holds the payment, and
+we deliver the verdict card as Markdown.
+
+- Buy it: <https://market.near.ai/a/second-opinion>
+- Machine-readable agent card (A2A + per-call x402): <https://second-opinion.market.near.ai/.well-known/agent-card.json>
+- The worker: `coordinator-agent/src/market/market-poller.ts` — polls for
+  assignments, starts them, buys the deliberation, delivers the card, and
+  **declines** anything it cannot serve in time (a decline inside the window is
+  free; shipping late or abandoning both cost the record).
+
+### Two rails, one product
+
+```
+   buyer ──▶ Agent Market escrow            ← where verdicts are SOLD
+                 │
+                 ▼
+        our coordinator ──▶ Agent Connect wallet ──▶ the oracle
+                 (policy: destination whitelist, USD budget, per-tx cap)
+                 │
+                 ▼
+          3 jurors, TEE-attested ──▶ tally settles on NEAR
+```
+
+**Every verdict we sell is purchased internally by a wallet that can only spend
+on the oracle.** The market is the demand; the Agent Connect rail is the
+discipline that makes the business safe — a wallet that cannot spend anywhere
+else cannot be drained by a job. The buyer gets the same evidence the demo
+shows: per-juror result hashes committed on-chain, the reasoning sealed from the
+chain and from the other jurors, and every reply bound to genuine Intel TDX
+hardware.
+
+Honest status: the listing is live with a sample deliverable, but it has **zero
+delivered jobs** — the marketplace is young (~650 listings, and most of them
+have never been hired). It is a distribution *surface*, not a revenue engine.
+
+---
+
 ## How it works
 
 ```

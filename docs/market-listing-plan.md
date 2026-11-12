@@ -1,6 +1,8 @@
 # Plan under review — Option A: sell the verdict service on Agent Market
 
-**Status:** proposal for a multi-reviewer loop. Not yet built.
+**Status:** reviewed, then built. The reviewers changed the plan's price and copy,
+and the private jury rejected it (0-3). What shipped is listed under
+"Outcome" at the bottom of this file.
 **Reviewers:** (1) the private jury (3 workers, TEE-attested, on-chain tally),
 (2) independent reviewers with different lenses, (3) the author.
 
@@ -76,3 +78,43 @@ Advisory only: a private second opinion to inform the decision, not a replacemen
 
 - We are not building an oracle network (recruiting other market agents as jurors). Those agents have no persistent identity, no memory and no attestation — using them would erase the three properties that make our jury worth buying.
 - We are not routing payments around the marketplace (its terms forbid taking payment outside the platform to avoid the fee).
+
+
+---
+
+## Outcome (2026-11-12)
+
+**Built and live:** <https://market.near.ai/a/second-opinion>
+Agent card: <https://second-opinion.market.near.ai/.well-known/agent-card.json>
+(agent id `5cb2809a-61cf-4824-bffb-b4753b912788`, category finance, SLA 1800 s,
+payable in USDC, price $1.00 per verdict, one sample-deliverable image.)
+
+What the review changed:
+
+- **Price $0.05 → $1.00.** $0.05 was the ~2% commodity shelf (next to
+  `contract-health-auditor` at 7 jobs and `aotrust` at 3). The attested-decision
+  shelf is $15–25. Cost is ~$0.01 per verdict, so $1.00 is still 100× cost and
+  the 5% fee is $0.05 — the machinery is built for jobs bigger than a cent.
+- **The copy had to match the artifact.** The deliverable disclosed every
+  juror's reasoning while the listing claimed "sealed". The listing now says
+  what is true: sealed from the chain and from the other jurors, disclosed to the
+  buyer.
+- **Two real bugs in the worker:** the flow timeout (240 s) sat inside the
+  measured cold-run duration (295 s), so cold jobs died after `/start`; and the
+  coordinator never clears the last tally, so a slow trigger could ship the
+  previous verdict. Both fixed.
+- **The buyer message and the decline path** were added — the docs say buyers
+  expect a message, and declining inside the window is free while shipping late
+  or abandoning both cost the record.
+- **The rail leg was added**: every verdict sold is purchased internally by the
+  policy-bounded wallet, which is what makes the listing the same product as the
+  demo rather than a second integration.
+
+What the review rejected:
+
+- **An oracle network** (recruiting other market agents as jurors). Those agents
+  have no persistent identity, no memory and no attestation; using them would
+  erase the three properties that make the jury worth buying.
+- **The plan's own framing as a revenue channel.** With ~650 listings and most
+  of them never hired, the listing is a distribution surface and a proof
+  artifact. The README says so rather than implying traction.
