@@ -15,7 +15,8 @@
     "live:testnet": "tsx scripts/run-live.ts",
     "test": "node --import tsx --test test/*.test.ts",
     "verify:tee": "tsx scripts/verify-near-ai-tee.ts",
-    "verify:live": "tsx scripts/verify-live-precedent.ts"
+    "verify:live": "tsx scripts/verify-live-precedent.ts",
+    "live:rail": "tsx ../../coordinator-agent/scripts/agent-connect-live-rail.ts --out fixtures/agent-connect/live-rail.json"
   },
   "dependencies": {
     "@near-js/crypto": "^2.5.1",

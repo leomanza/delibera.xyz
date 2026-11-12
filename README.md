@@ -187,6 +187,34 @@ One more class of bug was found and fixed the same way: the run used to accept
 requires a result produced **after** the trigger (`isFreshResult()`), and the
 run refuses to trigger while a juror is still mid-vote.
 
+### The live policy rail (the guardrail biting, for real)
+
+The refusal has to come from the API — a replay cannot prove it. The rail runs
+it live and writes a receipt with the provider's own error body:
+
+```sh
+cd hackathon/evidence
+NEAR_ENV_FILE=/path/to/coordinator.env npm run live:rail
+```
+
+It reads the agent's live policy, then has the agent pay a destination that is
+**not** on the owner-signed whitelist. The API must refuse it before dispatch
+with `403 policy_destination_denied`. With `--ratify <address>` it also runs
+the unlock leg: the owner signs ONE policy update (NEP-413, no chain tx), the
+policy goes `APPLIED` + `provider_policy_synced`, and the same transfer then
+goes through. If the grant in the environment is dead it mints a new one with
+the owner's signature (the token is never stored — only its sha256 commitment).
+
+Exit codes: `0` the rail ran and the bite was refused, `1` the guardrail did
+**not** hold, `2` the method surface is unavailable (no key, retired key, no
+agent) — the offline judge stays green in that case.
+
+> **Status: waiting on a partner key.** The key in our environment was retired
+> by the provider (`api_key_retired` — "keys moved to the partner portal").
+> A new key from <https://partners.demo.agentsonintents.com> plus the owner key
+> in the keychain is all this needs. The API itself is healthy: mainnet,
+> `operational`, `outlayer.near` as the provider contract.
+
 ### Re-check the whole precedent yourself
 
 ```sh

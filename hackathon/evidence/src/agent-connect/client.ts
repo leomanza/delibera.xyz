@@ -35,8 +35,11 @@ export interface Policy {
 }
 
 export class AgentApiError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  /** The provider's own error body, verbatim — the evidence of WHAT refused. */
+  public body: unknown;
+  constructor(public status: number, public code: string, message: string, body?: unknown) {
     super(message);
+    this.body = body;
   }
 }
 
@@ -56,7 +59,7 @@ async function http(path: string, init?: RequestInit): Promise<any> {
   try { body = text ? JSON.parse(text) : null; } catch { body = text; }
   if (!res.ok) {
     const code = body?.errors?.[0]?.code || body?.code || 'unknown';
-    throw new AgentApiError(res.status, code, `${res.status} ${code}: ${text.slice(0, 200)}`);
+    throw new AgentApiError(res.status, code, `${res.status} ${code}: ${text.slice(0, 200)}`, body);
   }
   return body;
 }
@@ -322,7 +325,7 @@ export async function waitStatus(correlationId: string, tries = 20): Promise<any
   return last;
 }
 
-export async function transfer(agentId: string, recipient: string, amountAtomic: string, confidential: boolean, idempotencyKey?: string): Promise<TransferResult> {
+export async function transfer(agentId: string, recipient: string, amountAtomic: string, confidential: boolean, idempotencyKey?: string, grantToken?: string): Promise<TransferResult> {
   if (isMock) {
     const a = mockAgents.get(agentId)!;
     mockPolicyEnforce(a, recipient, amountAtomic); // throws with real error codes
@@ -332,8 +335,46 @@ export async function transfer(agentId: string, recipient: string, amountAtomic:
   }
   const res = await http(`/v1/agents/${agentId}/transfer`, {
     method: 'POST',
-    headers: { 'X-Grant-Token': GRANT_TOKEN, 'Idempotency-Key': idempotencyKey || `tr:${agentId}:${Date.now()}` },
+    headers: { 'X-Grant-Token': grantToken || GRANT_TOKEN, 'Idempotency-Key': idempotencyKey || `tr:${agentId}:${Date.now()}` },
     body: JSON.stringify({ asset: USDT_NEAR, amount: amountAtomic, recipient, confidential }),
   });
   return { status: res.status, correlationId: res.correlation_id, txHash: res.details?.tx_hash };
+}
+
+/**
+ * Issue a NEW grant live, with the owner's signature.
+ *
+ * A grant is the owner's signed permission for one actor to act. The backend
+ * stores only the commitment — sha256 of the token string — so the token
+ * itself is minted here and never leaves the process except in the
+ * X-Grant-Token header. The format and the commitment are pinned by the
+ * official vectors: token = "ngt_" + 32 random bytes base64url,
+ * commitment = sha256(token) hex.
+ *
+ * "Use a new token for every grant" (grant_credential_reused otherwise), so
+ * this never reuses the token from the environment.
+ */
+export async function issueGrantLive(agentId: string, label: string, expiresInDays = 30): Promise<{ token: string; grantId?: string }> {
+  if (isMock) {
+    console.log(`[agent-connect:mock] grant_issue "${label}" (owner signature simulated)`);
+    return { token: 'ngt_mock' };
+  }
+  const { randomBytes, createHash } = await import('node:crypto');
+  const token = `ngt_${randomBytes(32).toString('base64url')}`;
+  const credential = createHash('sha256').update(token, 'utf8').digest('hex');
+  const expiresAt = new Date(Date.now() + expiresInDays * 86_400_000).toISOString();
+  const gen = await http('/v1/generate-intent', {
+    method: 'POST',
+    body: JSON.stringify({ type: 'grant_issue', agent_id: agentId, label, credential, expires_at: expiresAt }),
+  });
+  const signedData = await ownerSignOwner(gen);
+  const submitted = await http('/v1/submit-intent', {
+    method: 'POST',
+    body: JSON.stringify({ type: gen.type, correlation_id: gen.correlation_id, signed_data: signedData }),
+  });
+  const final = await waitStatus(submitted.correlation_id || gen.correlation_id);
+  if (final?.status !== 'SUCCESS') {
+    throw new Error(`grant_issue ${final?.status}: ${final?.failure_code || ''}`);
+  }
+  return { token, grantId: final?.details?.grant?.grant_id };
 }
