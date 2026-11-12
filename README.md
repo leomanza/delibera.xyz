@@ -87,6 +87,7 @@ git log --oneline pre-hackathon..hackathon
 | **The verdict oracle seam** — proposal in → verdict card out, settlement untouched | `coordinator-agent/src/agent-connect/verdict-oracle.ts` |
 | **The evidence harness** — judge sequence, capsule (`cso-capsule/1`), offline digest verifier, no-key scanner, 18 invariant tests | `hackathon/evidence/` |
 | **A live end-to-end precedent on testnet** — proposal **#80**: three real jurors voted independently and **one dissented** (Approved 2-1, quorum 2/3), `record_worker_submissions` + `coordinator_resume` settled on-chain, and each juror's `sha256(result)` still equals the contract's `result_hash` | `hackathon/evidence/fixtures/live-testnet/proposal-80.json` |
+| **The guardrail biting live** — the Agent Connect API refuses a live transfer to a destination outside the owner-signed whitelist: `403 policy_destination_denied`, provider's own body and `request_id` captured | `hackathon/evidence/fixtures/agent-connect/live-rail.json` |
 | **TEE proof for the jurors' reasoning** — the NEAR AI Cloud signature of each juror's reply is verified with **NEAR's own official verifier**, and the signing key is shown to be bound to genuine Intel TDX hardware | `npm run verify:tee` in `hackathon/evidence` |
 | **Jury size as a parameter** — `--jurors N --quorum K`; the contract already stored `expected_worker_count`/`quorum` | `hackathon/evidence/scripts/run-live.ts` |
 
@@ -209,11 +210,12 @@ Exit codes: `0` the rail ran and the bite was refused, `1` the guardrail did
 **not** hold, `2` the method surface is unavailable (no key, retired key, no
 agent) — the offline judge stays green in that case.
 
-> **Status: waiting on a partner key.** The key in our environment was retired
-> by the provider (`api_key_retired` — "keys moved to the partner portal").
-> A new key from <https://partners.demo.agentsonintents.com> plus the owner key
-> in the keychain is all this needs. The API itself is healthy: mainnet,
-> `operational`, `outlayer.near` as the provider contract.
+> **Status: the bite is captured live** (2026-11-12) — `403 policy_destination_denied`
+> with the provider's own error body and `request_id`. The partner key had to be
+> re-issued at <https://partners.demo.agentsonintents.com> (the old one was
+> retired). The unlock leg — the owner signing one policy update and the same
+> transfer then going through — needs the agent funded with USDC; our demo
+> accounts hold NEAR but no USDC, so that leg waits on a swap or a top-up.
 
 ### Re-check the whole precedent yourself
 

@@ -357,7 +357,7 @@ export async function transfer(agentId: string, recipient: string, amountAtomic:
 export async function issueGrantLive(agentId: string, label: string, expiresInDays = 30): Promise<{ token: string; grantId?: string }> {
   if (isMock) {
     console.log(`[agent-connect:mock] grant_issue "${label}" (owner signature simulated)`);
-    return { token: 'ngt_mock' };
+    return { token: 'mock-grant-token' };
   }
   const { randomBytes, createHash } = await import('node:crypto');
   const token = `ngt_${randomBytes(32).toString('base64url')}`;

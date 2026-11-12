@@ -1,0 +1,54 @@
+{
+  "meta": {
+    "capturedAt": "2026-11-12T03:25:06.810Z",
+    "api": "https://api.demo.agentsonintents.com",
+    "agentId": "c6b8a14d6b2fdd22e6a8c5182955f1dbca86453d71de4ce3e6cf8c96613ed889",
+    "policyRevision": 4,
+    "policyHash": "a435476dd5b4f903c1b5e91f3c732ac66d976ec4355684af0293c04169d3e3ed",
+    "policyStatus": "APPLIED",
+    "providerPolicySynced": true,
+    "destinations": [
+      "ac-oracle.delibera.near",
+      "ac-owner.delibera.near"
+    ],
+    "budget": {
+      "daily": {
+        "limit_usd": "0.20",
+        "spent_usd": "0.000000",
+        "remaining_usd": "0.200000",
+        "resets_at": "2026-11-13T01:00:15.331Z"
+      },
+      "weekly": {
+        "limit_usd": null,
+        "spent_usd": null,
+        "remaining_usd": null,
+        "resets_at": null
+      },
+      "monthly": {
+        "limit_usd": "0.20",
+        "spent_usd": "0.029997",
+        "remaining_usd": "0.170003",
+        "resets_at": "2026-11-19T01:00:15.331Z"
+      }
+    },
+    "ownerAccount": "ac-owner.delibera.near"
+  },
+  "bite": {
+    "refused": true,
+    "body": {
+      "errors": [
+        {
+          "status": "403",
+          "code": "policy_destination_denied",
+          "layer": "policy",
+          "title": "Policy destination denied",
+          "detail": "The account's destination rule does not allow this address. Ask the owner to add it to the policy destinations; every grant follows it at once, with no new grant."
+        }
+      ],
+      "meta": {
+        "request_id": "8844cfc5-5565-4be7-bd52-73a65e8b0a9f"
+      }
+    },
+    "message": "403 policy_destination_denied: {\"errors\":[{\"status\":\"403\",\"code\":\"policy_destination_denied\",\"layer\":\"policy\",\"title\":\"Policy destination denied\",\"detail\":\"The account's destination rule does not allow this address. Ask the owner t"
+  }
+}

@@ -8,9 +8,21 @@
  * Run: npm run judge
  */
 import { readFileSync, existsSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { loadProposal74, loadReceipt } from '../src/verdict-fixture.js';
 import { buildCapsule } from '../src/capsule.js';
 import { runSigningVectors } from './verify-signing.js';
+interface LiveRail {
+  meta: { capturedAt: string; agentId: string; policyRevision: number; policyStatus: string; providerPolicySynced: boolean; destinations: string[] };
+  bite?: { refused: boolean; body?: { errors?: Array<{ status?: string; code?: string; layer?: string; title?: string; detail?: string }>; meta?: { request_id?: string } } };
+}
+const RAIL_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'agent-connect', 'live-rail.json');
+/** The live capture of the refusal, if we have one. Absent -> the judge falls back to the fixture. */
+function loadLiveRail(): LiveRail | null {
+  if (!existsSync(RAIL_FILE)) return null;
+  try { return JSON.parse(readFileSync(RAIL_FILE, 'utf8')) as LiveRail; } catch { return null; }
+}
 import { runNoKeyCheck, noKeyPassLine } from './verify-no-key.js';
 
 const line = () => console.log('─'.repeat(72));
@@ -43,11 +55,21 @@ console.log(`  [curl] RPC view get_proposal {"proposal_id":${p74.proposal.propos
 
 /* STEP 3 — the provider refuses the un-whitelisted vendor */
 head(3, 'El pago al vendor — GUARDRAIL BITE (provider-checked)');
-console.log(`  ${denied.meta.label}`);
-console.log(`  HTTP ${denied.refusal.http} ${denied.refusal.code}`);
-console.log(`  who said NO: ${denied.refusal.layer}`);
-console.log(`  → ${denied.refusal.message}`);
-console.log(`  ${denied.refusal.replayNote}`);
+const liveRail = loadLiveRail();
+if (liveRail) {
+  const e = liveRail.bite?.body?.errors?.[0];
+  console.log(`  LIVE CAPTURE ${liveRail.meta.capturedAt} — the API refused it, live:`);
+  console.log(`  HTTP ${e?.status ?? '?'} ${e?.code ?? '?'}  (layer: ${e?.layer ?? '?'})`);
+  console.log(`  ${e?.title ?? ''}: ${e?.detail ?? ''}`);
+  console.log(`  request_id ${liveRail.bite?.body?.meta?.request_id ?? '—'} · agent ${liveRail.meta.agentId.slice(0, 16)}… · policy rev ${liveRail.meta.policyRevision} (${liveRail.meta.policyStatus}, synced ${liveRail.meta.providerPolicySynced})`);
+  console.log(`  the agent's own destinations: ${liveRail.meta.destinations.join(', ')}`);
+} else {
+  console.log(`  ${denied.meta.label}`);
+  console.log(`  HTTP ${denied.refusal.http} ${denied.refusal.code}`);
+  console.log(`  who said NO: ${denied.refusal.layer}`);
+  console.log(`  → ${denied.refusal.message}`);
+  console.log(`  ${denied.refusal.replayNote}`);
+}
 console.log(`  [curl] api POST /v1/agents/$AGENT_ID/transfers recipient:ac-owner.delibera.near amount:10000`);
 
 /* STEP 4 — byte-level integrity, honestly scoped */

@@ -138,11 +138,14 @@ async function main(): Promise<number> {
 
   // ── 2. the bite ───────────────────────────────────────────────────────────
   // A destination that is NOT on the whitelist. The API must refuse it.
-  const refused = ratify ?? VENDOR;
-  const onList = destinations.some((d) => d.address === refused);
-  if (onList) {
-    console.log(`\n${refused} is already on the whitelist — nothing to refuse.`);
-    console.log('RAIL: SKIP — pick a destination that is NOT whitelisted');
+  // The destination to be refused: --destination, else the first candidate
+  // that is NOT on the whitelist. Candidates are demo accounts; the agent has
+  // no balance, so even a guardrail failure could not move money.
+  const candidates = [arg('destination'), 'vendor.near', VENDOR].filter(Boolean) as string[];
+  const refused = candidates.find((c) => !destinations.some((d) => d.address === c));
+  if (!refused) {
+    console.log('\nevery candidate destination is already on the whitelist — nothing to refuse.');
+    console.log('RAIL: SKIP — pass --destination <account> that is NOT whitelisted');
     return 2;
   }
   console.log(`\n[1] the agent tries to pay ${refused} (not on the whitelist) — $0.01`);
