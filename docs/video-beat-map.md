@@ -13,13 +13,13 @@ cd coordinator-agent && npm run dev
 cd ../worker-agent && npm run dev:worker1     # + dev:worker2 / dev:worker3
 ```
 
-Check: `curl -s localhost:3000/agent-connect/demo/meta` → `"mode":"live"`.
+Check: `curl -s localhost:3000/second-opinion/demo/meta` → `"mode":"live"`.
 
 ---
 
 ## Beat 1 · 0:00 — the wallet and its rules
 
-**Show:** `http://localhost:3000/agent-connect/demo` (the session rail, LIVE badge).
+**Show:** `http://localhost:3000/second-opinion/demo` (the session rail, LIVE badge).
 **Say:** *"This is an agent wallet with real USDC. It can only transfer to two addresses —
 the oracle that sells the verdict and the vendor. Its rules are an owner-signed policy on
 the NEAR Intents Agent API, not a prompt."*

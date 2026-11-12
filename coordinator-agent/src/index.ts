@@ -52,11 +52,12 @@ app.get('/', (c) => {
 // Coordination routes
 app.route('/api/coordinate', coordinateRoute);
 
-// Agent Connect verdict oracle — POST /agent-connect/verdict {proposal} →
-// poll GET /agent-connect/verdict/:id for the verdict card. The seam the
-// Agent Connect demo (and any future buyer) calls; engine untouched.
-app.route('/agent-connect', verdictOracle);
-app.route('/agent-connect', demoRoutes);
+// The product's own surface — /second-opinion/* (the Agent Connect API is
+// the rail underneath; the product face is not named after it).
+//   /second-opinion/demo        the live session UI
+//   /second-opinion/verdict     the verdict oracle BFF (proposal in → card out)
+app.route('/second-opinion', verdictOracle);
+app.route('/second-opinion', demoRoutes);
 
 // Stellar x402 payment gateway — wraps /x402/* routes with HTTP 402 negotiation.
 // The middleware returns 402 with Stellar payment requirements for unpaid requests

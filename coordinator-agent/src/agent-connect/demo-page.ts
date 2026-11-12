@@ -114,7 +114,7 @@ function stash(t){ COPYSTORE.push(t); return COPYSTORE.length-1; }
 var S={ sessionId:null, mode:null, events:[], verdict:null, policy:null, balances:null, agent:null, vendors:null, presets:[] };
 function setStep(n){ for(var i=1;i<=5;i++){ var el=$('st'+i); if(!el) continue; el.className='st'+(i===n?' on':(i<n?' done':'')); } }
 async function api(path,opts){
-  var r=await fetch('/agent-connect'+path,opts);
+  var r=await fetch('/second-opinion'+path,opts);
   var b=await r.json().catch(function(){ return {}; });
   if(!r.ok&&r.status!==202&&r.status!==409){
     var msg=(b.errors&&b.errors[0]&&b.errors[0].code)||b.error||b.message||String(r.status);

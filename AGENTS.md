@@ -102,7 +102,7 @@ Sketch the real-but-simple, isolated prototype:
   `near-mainnet-<account>` (field `private_key`). Server-side owner signing is legitimate here
   because the demo owner accounts are ours; in a product the owner's browser wallet signs.
 - **No commits/pushes without an explicit user request.**
-- **Demo:** `cd coordinator-agent && npm run dev` → `http://localhost:3000/agent-connect/demo`.
+- **Demo:** `cd coordinator-agent && npm run dev` → `http://localhost:3000/second-opinion/demo`.
   Live mode requires the env file; without it the same UI runs mock mode. `/demo/meta` reports
   mode + `/v1/network` health.
 - **Amounts are atomic integer strings.** Demo asset: NEAR-native USDC
