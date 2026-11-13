@@ -19,6 +19,28 @@ Everything before that signature is furnace-tested refusal.
 **Tracks:** security · swarms · privacy · agents
 **Chain:** NEAR — mainnet USDC (`nep141:17208628…133a1`), Agent Connect rail, on-chain settlement
 
+> **What predates this project (disclosure).** The deliberation engine, the
+> coordinator, the three jurors and the on-chain settlement contract were built
+> **before** the hackathon window, as a paid deliberation oracle on Stellar
+> (x402). What this repository adds **inside the window** is the part this
+> submission is about: the **NEAR Intents Agent API policy rail** — an
+> owner-signed spend policy enforced by the provider — the live session UI that
+> makes the refusal legible, the evidence harness, and the Agent Market
+> listing. The baseline is not hidden: it is the same history, behind the
+> `pre-hackathon` tag, and the window diff is one command:
+>
+> ```sh
+> git diff pre-hackathon..hackathon    # 74 files, ~11,200 insertions
+> ```
+>
+> (A shallow clone — `git clone --depth 1` — has no tag; run `git fetch --tags`
+> first.)
+>
+> Per the hackathon's own rules (Q-002, Q-003, Q-005): an existing product on
+> another chain is allowed, only the NEAR integration built in the window is
+> judged, and own pre-window libraries count as baseline and are listed below.
+> The baseline's home is <https://github.com/leomanza/delibera.xyz>.
+
 ---
 
 ## Try it in 60 seconds
@@ -26,8 +48,8 @@ Everything before that signature is furnace-tested refusal.
 No wallet extension, no keys, no funds, ~30 seconds, no network writes:
 
 ```sh
-git clone https://github.com/leomanza/delibera.xyz
-cd delibera.xyz/hackathon/evidence
+git clone https://github.com/leomanza/confidential-second-opinion
+cd confidential-second-opinion/hackathon/evidence
 npm install
 npm run judge
 ```
@@ -97,6 +119,7 @@ count as baseline, they are listed here rather than claimed as new):
 
 | Baseline piece | Origin |
 |---|---|
+| The whole pre-window product (coordinator, jurors, NEAR settlement contract, Ensue coordination, frontend) | `leomanza/delibera.xyz` before the `pre-hackathon` tag — the same history, in this repo |
 | Multi-agent deliberation engine, coordinator, worker agents | this repo, pre-window |
 | Ensue Memory Network coordination | this repo, pre-window |
 | Rust coordinator contract (`promise_yield` create/resume) | `coordinator-contract/`, pre-window |
