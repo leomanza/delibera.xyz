@@ -26,8 +26,8 @@ Everything before that signature is furnace-tested refusal.
 No wallet extension, no keys, no funds, ~30 seconds, no network writes:
 
 ```sh
-git clone https://github.com/leomanza/near-shade-coordination
-cd near-shade-coordination/hackathon/evidence
+git clone https://github.com/leomanza/delibera.xyz
+cd delibera.xyz/hackathon/evidence
 npm install
 npm run judge
 ```
@@ -46,7 +46,7 @@ What you just saw, step by step:
 | Step | What it proves | Where it comes from |
 |---|---|---|
 | 1 | The second opinion is bought: $0.01 confidential transfer to the oracle | captured receipt |
-| 2 | Three jurors deliberate; only `result_hash` commitments travel, tally 3–0 | captured proposal #74 |
+| 2 | Three jurors deliberate; only `result_hash` commitments travel — and one dissented | captured proposal #80 (Approved 2-1) |
 | 3 | **The guardrail bites**: `403 policy_destination_denied`, issued by the provider before dispatch | captured refusal |
 | 4 | Byte-level integrity of the evidence, honestly scoped | recomputed digests |
 | 5 | The ratification is real: NEP-413, tag 2147484061, sha256 | byte-verified against official vectors |
@@ -197,7 +197,7 @@ sealed text.
 Testnet by default. Mainnet requires an explicit flag and the owner's key.
 
 ```sh
-cd near-shade-coordination/hackathon/evidence
+cd delibera.xyz/hackathon/evidence
 NEAR_ENV_FILE=/path/to/coordinator.env \
 npm run live:testnet -- --dids did:key,<worker1>,did:key,<worker2>,did:key,<worker3> \
   --labels "Juror 1,Juror 2,Juror 3"
@@ -329,7 +329,7 @@ the reasoning.
 | Artifact | What it is |
 |---|---|
 | `hackathon/evidence/fixtures/policy.json` | owner-signed policy, revision 4, `APPLIED` + `provider_policy_synced: true` |
-| `hackathon/evidence/fixtures/proposal-74.json` | verdict #74, 3–0, per-juror `result_hash` (testnet-captured) |
+| `hackathon/evidence/fixtures/proposal-74.json` | verdict #74 — three jurors voted Approved; the tally this receipt *records* is wrong, and says so (`knownIssue`) |
 | `hackathon/evidence/fixtures/receipt-approved.json` | $0.01 USDC `intents_transfer`, `UNCERTAIN` → `SUCCESS` |
 | `hackathon/evidence/fixtures/receipt-denied.json` | the `403 policy_destination_denied` — the guardrail bite |
 | `hackathon/evidence/fixtures/live-testnet/proposal-76.json` | live precedent #76 — real jurors, on-chain settlement, receipts |

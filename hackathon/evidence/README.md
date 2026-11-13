@@ -73,12 +73,12 @@ Target live loop (testnet-only here, mainnet behind `--i-understand-mainnet`).
 Secrets stay in the ORIGINAL Delibera repos:
 
     cd /Users/manza/Code/hackathon/near-hackathon-26
-    NEAR_ENV_FILE=/Users/manza/Code/near-shade-coordination/coordinator-agent/.env.development.local \
+    NEAR_ENV_FILE=/path/to/your/coordinator-agent/.env.development.local \
     npm run live:testnet -- \
       --dids did:key,<worker dids from worker /health> \
       --labels "Juror 1,Juror 2,Juror 3"
 
-Workers must be running (`near-shade-coordination/worker-agent`,
+Workers must be running (`worker-agent/` in this repo,
 `npm run dev:worker1` / `dev:worker2` / `dev:worker3`; ports 3001-3003).
 Receipt lands in `fixtures/live-<network>/proposal-<id>.json` (dir named by network, so a future mainnet-forced run cannot masquerade as testnet). With no active
 run, `--resume-only <id>` re-checks a finished proposal against its receipts.
